@@ -1,5 +1,6 @@
-#include <rdma/ib_pack.h>  // BIT(), maybe among other things
-#include "rxe_opcode.h"
+#ifndef IRDMA_H
+#define IRDMA_H
+
 #include "rxe_hdr.h"
 
 typedef enum { OK, ERROR } status;
@@ -40,19 +41,6 @@ register_opcode_status register_irdma_op(
 // name : a name for the opcode
 // irdma_op_num : the number of the irdma_op for this opcode
 //   (previously registered with register_irdma_op)
-// returns :
-//   OPCODE_OK on success
-//   OPCODE_INVALID if opcode_num is outside allowed range
-//   OPCODE_IN_USE if the desired opcode_num is already in use
-register_opcode_status register_opcode(
-    unsigned opcode_num,
-    char* name,
-    unsigned irdma_op_num
-);
-
-// returns a bitwise-OR of the appropriate flags defined in rxe_hdr_mask
-// irdma_op_num : the number of the irdma_op for this opcode
-//   (previously registered with register_irdma_op)
 // immdt : whether the packet includes an immediate value to be presented to the receiver
 // payload : whether the packet contains a payload
 // invalidate : whether the packet involves an 'invalidate' (better explanation TBD)
@@ -63,9 +51,21 @@ register_opcode_status register_opcode(
 //   both 'start' and 'end' (but not 'middle').  Better explanation TBD
 // atomicack : set to TRUE iff the packet is an ack/response to an IRDMA_ATOMIC operation
 //   (in this case irdma_op_num should always be IRDMA_ACK)
-enum rxe_hdr_mask computeMask(struct rxe_qp* qp, unsigned irdma_op_num, bool immdt,
-    bool payload, bool invalidate, bool requiresReceive, bool postComplete,
-    bool start, bool middle, bool end, bool atomicack);
+// returns :
+//   OPCODE_OK on success
+//   OPCODE_INVALID if opcode_num is outside allowed range, or if the combination of arguments passed
+//     is invalid
+//   OPCODE_IN_USE if the desired opcode_num is already in use
+register_opcode_status register_opcode(
+    struct rxe_qp* qp,
+    unsigned opcode_num,
+    char* name,
+    unsigned irdma_op_num,
+    bool immdt, bool payload, bool invalidate, bool requiresReceive, bool postComplete,
+    bool start, bool middle, bool end, bool atomicack
+);
 
 // requires that the 'mask' field of info already be populated and valid
 void computeOffset(struct rxe_opcode_info* info);
+
+#endif

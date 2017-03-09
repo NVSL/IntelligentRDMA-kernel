@@ -539,7 +539,7 @@ static void update_wqe_psn(struct rxe_qp *qp,
 		wqe->last_psn = (qp->req.psn + num_pkt - 1) & BTH_PSN_MASK;
 	}
 
-	if (pkt->irmda_op_num == IRDMA_READ)
+	if (pkt->irdma_op_num == IRDMA_READ)
 		qp->req.psn = (wqe->first_psn + num_pkt) & BTH_PSN_MASK;
 	else
 		qp->req.psn = (qp->req.psn + 1) & BTH_PSN_MASK;

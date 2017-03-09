@@ -378,7 +378,7 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 		}
 	}
 
-	if (pkt->mask & RXE_READ_OR_ATOMIC) {
+	if (pkt->irdma_op_num == IRDMA_READ || pkt->irdma_op_num == IRDMA_ATOMIC) {
 		/* it is the requesters job to not send
 		 * too many read/atomic ops, we just
 		 * recycle the responder resource queue
@@ -435,7 +435,7 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 		}
 		access = (pkt->irdma_op_num == IRDMA_READ) ? IB_ACCESS_REMOTE_READ
 						     : IB_ACCESS_REMOTE_WRITE;
-	} else if (pkt->irdma_op_num = IRDMA_ATOMIC) {
+	} else if (pkt->irdma_op_num == IRDMA_ATOMIC) {
 		qp->resp.va = atmeth_va(pkt);
 		qp->resp.rkey = atmeth_rkey(pkt);
 		qp->resp.resid = sizeof(u64);

@@ -34,6 +34,7 @@
 #include <rdma/ib_pack.h>
 #include "rxe_opcode.h"
 #include "rxe_hdr.h"
+#include "irdma.h"
 
 /* useful information about work request opcodes and pkt opcodes in
  * table form

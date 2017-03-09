@@ -1,4 +1,7 @@
 #include "irdma.h"
+#include <rdma/ib_pack.h>  // BIT(), maybe among other things
+#include "rxe_opcode.h"
+#include "rxe_loc.h"  // qp_type(), maybe among other things
 
 struct irdma_op irdma_op[] = {
   [IRDMA_ACK] = { .name = "IRDMA_ACK", .handle_func = &handle_ack },
@@ -21,41 +24,23 @@ register_opcode_status register_irdma_op(
 }
 
 register_opcode_status register_opcode(
+    struct rxe_qp* qp,
     unsigned opcode_num,
     char* name,
-    unsigned irdma_op_num
+    unsigned irdma_op_num,
+    bool immdt, bool payload, bool invalidate, bool requiresReceive, bool postComplete,
+    bool start, bool middle, bool end, bool atomicack
 ) {
   if(opcode_num >= RXE_NUM_OPCODE) return OPCODE_INVALID;
   if(rxe_opcode[opcode_num].name) return OPCODE_IN_USE;  // assume that name==NULL indicates free
     // TODO: should make sure that rxe_opcode is initialized s.t. this is the case
-  enum rxe_hdr_mask mask = computeMask(irdma_op_num);
-  rxe_opcode[opcode_num] = {
-    .name   = name,
-    .mask   = mask,
-    .length = RXE_BTH_BYTES
-      + (mask & RXE_IMMDT_MASK  ? RXE_IMMDT_BYTES  : 0)
-      + (mask & RXE_RETH_MASK   ? RXE_RETH_BYTES   : 0)
-      + (mask & RXE_AETH_MASK   ? RXE_AETH_BYTES   : 0)
-      + (mask & RXE_ATMACK_MASK ? RXE_ATMACK_BYTES : 0)
-      + (mask & RXE_ATMETH_MASK ? RXE_ATMETH_BYTES : 0)
-      + (mask & RXE_IETH_MASK   ? RXE_IETH_BYTES   : 0)
-      + (mask & RXE_RDETH_MASK  ? RXE_RDETH_BYTES  : 0)
-      + (mask & RXE_DETH_MASK   ? RXE_DETH_BYTES   : 0)
-      ,
-  };
-  computeOffset(&rxe_opcode[opcode_num]);
-  return OPCODE_OK;
-}
-
-enum rxe_hdr_mask computeMask(struct rxe_qp* qp, unsigned irdma_op_num, bool immdt, 
-    bool payload, bool invalidate, bool requiresReceive, bool postComplete, 
-    bool start, bool middle, bool end, bool atomicack) {
   if(unlikely(atomicack && irdma_op_num != IRDMA_ACK)) {
     pr_err("IRDMA: Tried to register opcode with atomicack but not IRDMA_ACK");
+    return OPCODE_INVALID;
   }
 #define SET_IF(cond, set_what) \
   ( (cond) ? (set_what) : (! (set_what) ) )
-  return
+  enum rxe_hdr_mask mask = 
         // RXE_LRH_MASK and RXE_BTH_MASK are not set by any existing opcodes.
       SET_IF(false, RXE_LRH_MASK)
     | SET_IF(false, RXE_BTH_MASK)
@@ -85,11 +70,31 @@ enum rxe_hdr_mask computeMask(struct rxe_qp* qp, unsigned irdma_op_num, bool imm
         // i.e. is an ack/response to an IRDMA_ATOMIC operation.  For now we let the user indicate this.
     | SET_IF(atomicack, RXE_ATMACK_MASK)
         // RXE_RDETH_MASK indicates whether the packet needs a 'reliable datagram extended transport header'.
-    | SET_IF(qp_type(qp) == IB_QPT_RD, RXE_RDETH_MASK)
+        // Strangely, this bit is never used for anything (as far as I can tell), and "RD" is not a 
+        // valid qp_type.  So until I learn otherwise, I'm just going to leave this unset for all opcodes.
+        // (in the existing code, it is set for all opcodes with name "IB_OPCODE_RD_*")
+    | SET_IF(false /*qp_type(qp) == IB_QPT_RD*/, RXE_RDETH_MASK)
         // RXE_DETH_MASK indicates whether the packet needs a 'datagram extended transport header'.
         // The rule here reflects existing convention.
-    | SET_IF((qp_type(qp) == IB_QPT_RD || qp_type(qp) == IB_QPT_UD) && irdma_op_num != IRDMA_ACK, RXE_DETH_MASK)
-    ;
+    | SET_IF((false /*qp_type(qp) == IB_QPT_RD*/ || qp_type(qp) == IB_QPT_UD) && irdma_op_num != IRDMA_ACK, RXE_DETH_MASK)
+  ;
+ rxe_opcode[opcode_num] = {
+    .name   = name,
+    .mask   = mask,
+    .irdma_op_num = irdma_op_num,
+    .length = RXE_BTH_BYTES
+      + (mask & RXE_IMMDT_MASK  ? RXE_IMMDT_BYTES  : 0)
+      + (mask & RXE_RETH_MASK   ? RXE_RETH_BYTES   : 0)
+      + (mask & RXE_AETH_MASK   ? RXE_AETH_BYTES   : 0)
+      + (mask & RXE_ATMACK_MASK ? RXE_ATMACK_BYTES : 0)
+      + (mask & RXE_ATMETH_MASK ? RXE_ATMETH_BYTES : 0)
+      + (mask & RXE_IETH_MASK   ? RXE_IETH_BYTES   : 0)
+      + (mask & RXE_RDETH_MASK  ? RXE_RDETH_BYTES  : 0)
+      + (mask & RXE_DETH_MASK   ? RXE_DETH_BYTES   : 0)
+      ,
+  };
+  computeOffset(&rxe_opcode[opcode_num]);
+  return OPCODE_OK;
 }
 
 void computeOffset(struct rxe_opcode_info* info) {

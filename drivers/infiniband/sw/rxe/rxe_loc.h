@@ -34,6 +34,8 @@
 #ifndef RXE_LOC_H
 #define RXE_LOC_H
 
+#include "irdma.h"
+
 /* rxe_av.c */
 
 int rxe_av_chk_attr(struct rxe_dev *rxe, struct ib_ah_attr *attr);
