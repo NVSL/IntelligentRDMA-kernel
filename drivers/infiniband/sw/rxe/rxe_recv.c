@@ -68,7 +68,7 @@ static int check_type_state(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 		goto err1;
 	}
 
-	if (pkt->mask & RXE_REQ_MASK) {
+	if (pkt->irdma_op_num != IRDMA_ACK) {
 		if (unlikely(qp->resp.state != QP_STATE_READY))
 			goto err1;
 	} else if (unlikely(qp->req.state < QP_STATE_READY ||
@@ -266,7 +266,7 @@ static inline void rxe_rcv_pkt(struct rxe_dev *rxe,
 			       struct rxe_pkt_info *pkt,
 			       struct sk_buff *skb)
 {
-	if (pkt->mask & RXE_REQ_MASK)
+	if (pkt->irdma_op_num != IRDMA_ACK)
 		rxe_resp_queue_pkt(rxe, pkt->qp, skb);
 	else
 		rxe_comp_queue_pkt(rxe, pkt->qp, skb);
@@ -374,6 +374,7 @@ int rxe_rcv(struct sk_buff *skb)
 	pkt->psn = bth_psn(pkt);
 	pkt->qp = NULL;
 	pkt->mask |= rxe_opcode[pkt->opcode].mask;
+    pkt->irdma_op_num = rxe_opcode[pkt->opcode].irdma_op_num;
 
 	if (unlikely(skb->len < header_size(pkt)))
 		goto drop;

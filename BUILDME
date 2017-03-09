@@ -1,1 +1,1 @@
-fakeroot make-kpkg --initrd --append-to-version=-irdma --revision=0.0 kernel_image kernel_headers -j 2
+fakeroot make-kpkg --initrd --append-to-version=-irdma --revision=0.01 kernel_image kernel_headers -j 2
