@@ -248,7 +248,7 @@ static inline int rxe_xmit_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 				  struct rxe_pkt_info *pkt, struct sk_buff *skb)
 {
 	int err;
-	int is_request = pkt->irdma_op_num != IRDMA_ACK;
+	int is_request = !(pkt->mask & IRDMA_ACK_MASK);
 
 	if ((is_request && (qp->req.state != QP_STATE_READY)) ||
 	    (!is_request && (qp->resp.state != QP_STATE_READY))) {

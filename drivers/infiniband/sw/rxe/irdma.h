@@ -1,9 +1,26 @@
 #ifndef IRDMA_H
 #define IRDMA_H
 
-#include "rxe_hdr.h"
+#include "rxe.h"
 
-typedef enum { OK, ERROR } status;
+// handle_status is the return type of the handle_func for an irdma_op.
+typedef enum {
+  OK = 0,  // indicates no error
+  ERROR_LENGTH,  // indicates that copy_data returned -ENOSPC
+  ERROR_MALFORMED_WQE,  // indicates that copy_data returned any nonzero code other than -ENOSPC
+  ERROR_RKEY_VIOLATION,  // explanation TBD, but name seems straightforward
+  ERROR_RNR,  // 'receiver not ready' - indicates that a required receive request was not posted
+  ERROR_MISALIGNED_ATOMIC,  // indicates that the target address for an atomic operation wasn't 8-bytes aligned
+  DONE,  // indicates we are completely done handling the packet, with no error.
+         // Note that OK should usually be used instead - with OK, a bunch of bookkeeping is done to
+         // complete the processing of this packet and prepare for the next.
+         // DONE indicates that you've already done all this yourself.
+} handle_status;
+
+// an irdma_context (along with info about the received packet) is passed to the handle_func for an irdma_op
+struct irdma_context {
+  struct rxe_qp* qp;
+};
 
 // irdma_op arises out of the observation that all the existing entries in
 // rxe_opcode have, in their 'mask' field, exactly one of the following 5 bits set:
@@ -15,15 +32,20 @@ typedef enum { OK, ERROR } status;
 #define IRDMA_MAX_OPS 256
 struct irdma_op {
   char* name;
-  status (*handle_func)(struct rxe_qp, struct rxe_pkt_info);
+  handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*);
 };
 extern struct irdma_op irdma_op[IRDMA_MAX_OPS];
-// 'built-in' (pre-existing) irdma_op_nums
+// cheating for now, allow other code to test against IRDMA_* opnums.
+// The reason I don't like this is that this prohibits new opnums from emulating
+// the same functionality as (wherever the test is happening).
+#ifndef IRDMA_OPNUMS
+#define IRDMA_OPNUMS
 #define IRDMA_ACK 0
 #define IRDMA_SEND 1
 #define IRDMA_WRITE 2
 #define IRDMA_READ 3
 #define IRDMA_ATOMIC 4
+#endif
 
 typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
 
@@ -34,7 +56,7 @@ typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status
 register_opcode_status register_irdma_op(
     unsigned irdma_op_num,
     char* name,
-    status (*handle_func)(struct rxe_qp, struct rxe_pkt_info)
+    handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*)
 );
 
 // opcode_num : the desired opcode number (not already in use)
@@ -51,21 +73,19 @@ register_opcode_status register_irdma_op(
 //   both 'start' and 'end' (but not 'middle').  Better explanation TBD
 // atomicack : set to TRUE iff the packet is an ack/response to an IRDMA_ATOMIC operation
 //   (in this case irdma_op_num should always be IRDMA_ACK)
+// qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // returns :
 //   OPCODE_OK on success
-//   OPCODE_INVALID if opcode_num is outside allowed range, or if the combination of arguments passed
-//     is invalid
+//   OPCODE_INVALID if opcode_num is outside allowed range, or irdma_op_num has not been registered,
+//     or if the combination of arguments passed is invalid
 //   OPCODE_IN_USE if the desired opcode_num is already in use
 register_opcode_status register_opcode(
-    struct rxe_qp* qp,
     unsigned opcode_num,
     char* name,
     unsigned irdma_op_num,
+    enum ib_qp_type qpt,
     bool immdt, bool payload, bool invalidate, bool requiresReceive, bool postComplete,
     bool start, bool middle, bool end, bool atomicack
 );
-
-// requires that the 'mask' field of info already be populated and valid
-void computeOffset(struct rxe_opcode_info* info);
 
 #endif

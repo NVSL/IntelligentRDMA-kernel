@@ -102,17 +102,20 @@ enum rxe_hdr_mask {
 	RXE_END_MASK		= BIT(NUM_HDR_TYPES + 4),
 
 	RXE_LOOPBACK_MASK	= BIT(NUM_HDR_TYPES + 5),
+
+    IRDMA_ACK_MASK      = BIT(NUM_HDR_TYPES + 6),
 };
 
 #define OPCODE_NONE		(-1)
 #define RXE_NUM_OPCODE		256
 
 struct rxe_opcode_info {
-	char			*name;
-	enum rxe_hdr_mask	mask;
-    unsigned    irdma_op_num;
-	int			length;
-	int			offset[NUM_HDR_TYPES];
+	char			  *name;
+	enum rxe_hdr_mask mask;
+    unsigned          irdma_op_num;
+    enum ib_qp_type   qpt;
+	int			      length;
+	int			      offset[NUM_HDR_TYPES];
 };
 
 extern struct rxe_opcode_info rxe_opcode[RXE_NUM_OPCODE];

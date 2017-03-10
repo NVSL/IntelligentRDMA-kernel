@@ -1,6 +1,9 @@
 obj-$(CONFIG_RDMA_RXE) += rdma_rxe.o
 
 rdma_rxe-y := \
+	irdma.o \
+	irdma_funcs.o \
+	irdma_opcode.o \
 	rxe.o \
 	rxe_comp.o \
 	rxe_req.o \

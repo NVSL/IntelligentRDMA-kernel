@@ -33,6 +33,7 @@
 
 #include "rxe.h"
 #include "rxe_loc.h"
+#include "irdma_opcode.h"
 
 MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves, Kamal Heib");
 MODULE_DESCRIPTION("Soft RDMA transport");
@@ -268,9 +269,29 @@ err1:
 static int rxe_init(struct rxe_dev *rxe)
 {
 	int err;
+    register_opcode_status st;
 
 	/* init default device parameters */
 	rxe_init_device_param(rxe);
+
+    /* register 'built-in' opcodes */
+    st = irdma_init_opcodes();
+    switch(st) {
+      case OPCODE_INVALID:
+        pr_err("irdma_init_opcodes() failed with OPCODE_INVALID\n");
+        err = -EINVAL;
+        goto err1;
+        break;
+      case OPCODE_IN_USE:
+        pr_err("irdma_init_opcodes() failed with OPCODE_IN_USE\n");
+        err = -EINVAL;
+        goto err1;
+        break;
+      case OPCODE_OK:
+        break;
+      default:
+        WARN_ON(1);  // unreachable
+    }
 
 	err = rxe_init_ports(rxe);
 	if (err)

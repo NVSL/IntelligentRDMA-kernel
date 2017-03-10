@@ -44,13 +44,13 @@ static int check_type_state(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 
 	switch (qp_type(qp)) {
 	case IB_QPT_RC:
-		if (unlikely((pkt->opcode & IB_OPCODE_RC) != 0)) {
+		if (unlikely(rxe_opcode[pkt->opcode].qpt != IB_QPT_RC)) {
 			pr_warn_ratelimited("bad qp type\n");
 			goto err1;
 		}
 		break;
 	case IB_QPT_UC:
-		if (unlikely(!(pkt->opcode & IB_OPCODE_UC))) {
+		if (unlikely(rxe_opcode[pkt->opcode].qpt != IB_QPT_UC)) {
 			pr_warn_ratelimited("bad qp type\n");
 			goto err1;
 		}
@@ -58,7 +58,8 @@ static int check_type_state(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 	case IB_QPT_UD:
 	case IB_QPT_SMI:
 	case IB_QPT_GSI:
-		if (unlikely(!(pkt->opcode & IB_OPCODE_UD))) {
+        // all of these work with opcodes registered for UD apparently?
+		if (unlikely(rxe_opcode[pkt->opcode].qpt != IB_QPT_UD)) {
 			pr_warn_ratelimited("bad qp type\n");
 			goto err1;
 		}
@@ -68,7 +69,7 @@ static int check_type_state(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 		goto err1;
 	}
 
-	if (pkt->irdma_op_num != IRDMA_ACK) {
+	if ((rxe_opcode[pkt->opcode].mask & IRDMA_ACK_MASK) == 0) {
 		if (unlikely(qp->resp.state != QP_STATE_READY))
 			goto err1;
 	} else if (unlikely(qp->req.state < QP_STATE_READY ||
