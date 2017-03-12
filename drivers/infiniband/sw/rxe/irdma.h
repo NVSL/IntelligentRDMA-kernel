@@ -28,11 +28,13 @@ struct irdma_context {
 // We separate this distinction out into an 'irdma_op' separate from the mask,
 // and allow its extensibility
 // We also observe that RXE_REQ_MASK is set iff RXE_ACK_MASK is not,
-// and we generalize references to RXE_REQ_MASK to mean (not irdma_op IRDMA_ACK)
+// and we generalize references to RXE_REQ_MASK to mean (not ack)
+// 'ack'==TRUE indicates 'ack'-type irdma_ops (ones that would have RXE_ACK_MASK set)
 #define IRDMA_MAX_OPS 256
 struct irdma_op {
   char* name;
   handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*);
+  bool ack;
 };
 extern struct irdma_op irdma_op[IRDMA_MAX_OPS];
 // cheating for now, allow other code to test against IRDMA_* opnums.
@@ -49,6 +51,12 @@ extern struct irdma_op irdma_op[IRDMA_MAX_OPS];
 
 typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
 
+// irdma_op_num : the desired irdma_op_num (not already in use)
+// name : a name for this irdma_op
+// handle_func : a function to be called to handle incoming packets of this type
+//   (see also irdma_funcs.h)
+// ack : if TRUE, packets of this type will be treated as 'ack' packets
+//   better explanation TBD
 // returns :
 //   OPCODE_OK on success
 //   OPCODE_INVALID if irdma_op_num is outside allowed range
@@ -56,7 +64,8 @@ typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status
 register_opcode_status register_irdma_op(
     unsigned irdma_op_num,
     char* name,
-    handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*)
+    handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*),
+    bool ack
 );
 
 // opcode_num : the desired opcode number (not already in use)
@@ -73,7 +82,7 @@ register_opcode_status register_irdma_op(
 //   if the packet is the only in a series, then under some circumstances you should set
 //   both 'start' and 'end' (but not 'middle').  Better explanation TBD
 // atomicack : set to TRUE iff the packet is an ack/response to an IRDMA_ATOMIC operation
-//   (in this case irdma_op_num should always be IRDMA_ACK)
+//   (in this case irdma_op_num should have been registered with ack==TRUE)
 // sched_priority : to my current understanding, setting this to TRUE instructs the
 //   internal scheduler to always handle an incoming packet of this type immediately,
 //   pushing aside other tasks (e.g. posting sends, completes, etc).

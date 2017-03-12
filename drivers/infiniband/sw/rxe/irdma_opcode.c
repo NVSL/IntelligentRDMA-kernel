@@ -214,11 +214,11 @@ register_opcode_status irdma_init_opcodes(void) {
   st = expr; \
   if(st) return st;
 
-  WITH_CHECK(register_irdma_op(IRDMA_ACK, "IRDMA_ACK", &handle_ack))
-  WITH_CHECK(register_irdma_op(IRDMA_SEND, "IRDMA_SEND", &handle_send))
-  WITH_CHECK(register_irdma_op(IRDMA_WRITE, "IRDMA_WRITE", &handle_write))
-  WITH_CHECK(register_irdma_op(IRDMA_READ, "IRDMA_READ", &handle_read))
-  WITH_CHECK(register_irdma_op(IRDMA_ATOMIC, "IRDMA_ATOMIC", &handle_atomic))
+  WITH_CHECK(register_irdma_op(IRDMA_ACK, "IRDMA_ACK", &handle_ack, true))
+  WITH_CHECK(register_irdma_op(IRDMA_SEND, "IRDMA_SEND", &handle_send, false))
+  WITH_CHECK(register_irdma_op(IRDMA_WRITE, "IRDMA_WRITE", &handle_write, false))
+  WITH_CHECK(register_irdma_op(IRDMA_READ, "IRDMA_READ", &handle_read, false))
+  WITH_CHECK(register_irdma_op(IRDMA_ATOMIC, "IRDMA_ATOMIC", &handle_atomic, false))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_FIRST, "IB_OPCODE_RC_SEND_FIRST",
       /*.irdma_op_num    = */ IRDMA_SEND,
       /*.qpt             = */ IB_QPT_RC,

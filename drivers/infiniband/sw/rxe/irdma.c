@@ -5,13 +5,15 @@ struct irdma_op irdma_op[IRDMA_MAX_OPS];
 register_opcode_status register_irdma_op(
     unsigned irdma_op_num,
     char* name,
-    handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*)
+    handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*),
+    bool ack
 ) {
   if(irdma_op_num >= IRDMA_MAX_OPS) return OPCODE_INVALID;
   if(irdma_op[irdma_op_num].name) return OPCODE_IN_USE;  // assume that name==NULL indicates free
     // TODO: should make sure that irdma_op is initialized s.t. this is the case
   irdma_op[irdma_op_num].name = name;
   irdma_op[irdma_op_num].handle_func = handle_func;
+  irdma_op[irdma_op_num].ack = ack;
   return OPCODE_OK;
 }
 
@@ -58,10 +60,7 @@ register_opcode_status register_opcode(
   if(unlikely(rxe_opcode[opcode_num].name)) return OPCODE_IN_USE;  // assume that name==NULL indicates free
     // TODO: should make sure that rxe_opcode is initialized s.t. this is the case
   if(unlikely(!irdma_op[irdma_op_num].name)) return OPCODE_INVALID;
-  if(unlikely(atomicack && irdma_op_num != IRDMA_ACK)) {
-    pr_err("IRDMA: Tried to register opcode with atomicack but not IRDMA_ACK");
-    return OPCODE_INVALID;
-  }
+  if(unlikely(atomicack && !irdma_op[irdma_op_num].ack)) return OPCODE_INVALID;
 #define SET_IF(cond, set_what) \
   ( (cond) ? (set_what) : (! (set_what) ) )
   mask = 
@@ -105,7 +104,6 @@ register_opcode_status register_opcode(
         // Invented this solely so that one can distinguish 'ack' packets from non-ack,
         // in a flexible way that allows multiple (custom) irdma_ops to be 'ack's.
         // However, for now we just set it for IRDMA_ACK packets
-    | SET_IF(irdma_op_num == IRDMA_ACK, IRDMA_ACK_MASK)
   ;
   rxe_opcode[opcode_num].name = name;
   rxe_opcode[opcode_num].mask = mask;

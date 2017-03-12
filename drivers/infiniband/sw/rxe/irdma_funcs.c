@@ -28,7 +28,7 @@ int send_packet(
 	int pad;
   bool atomicack = rxe_opcode[opcode_num].mask & RXE_ATMACK_MASK;
 
-	if(unlikely(!(rxe_opcode[opcode_num].mask & IRDMA_ACK_MASK))) {
+	if(unlikely(!(irdma_op[rxe_opcode[opcode_num].irdma_op_num].ack))) {
 		pr_err("Tried to send_packet but specifying a non-ack opcode\n");
 		return -EINVAL;
 	}
