@@ -63,6 +63,7 @@ register_opcode_status register_irdma_op(
 // name : a name for the opcode
 // irdma_op_num : the number of the irdma_op for this opcode
 //   (previously registered with register_irdma_op)
+// qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // immdt : whether the packet includes an immediate value to be presented to the receiver
 // payload : whether the packet contains a payload
 // invalidate : whether the packet involves an 'invalidate' (better explanation TBD)
@@ -73,7 +74,10 @@ register_opcode_status register_irdma_op(
 //   both 'start' and 'end' (but not 'middle').  Better explanation TBD
 // atomicack : set to TRUE iff the packet is an ack/response to an IRDMA_ATOMIC operation
 //   (in this case irdma_op_num should always be IRDMA_ACK)
-// qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
+// sched_priority : to my current understanding, setting this to TRUE instructs the
+//   internal scheduler to always handle an incoming packet of this type immediately,
+//   pushing aside other tasks (e.g. posting sends, completes, etc).
+//   In existing code, only IB_OPCODE_RC_RDMA_READ_REQUEST gets this treatment.
 // returns :
 //   OPCODE_OK on success
 //   OPCODE_INVALID if opcode_num is outside allowed range, or irdma_op_num has not been registered,
@@ -85,7 +89,7 @@ register_opcode_status register_opcode(
     unsigned irdma_op_num,
     enum ib_qp_type qpt,
     bool immdt, bool payload, bool invalidate, bool requiresReceive, bool postComplete,
-    bool start, bool middle, bool end, bool atomicack
+    bool start, bool middle, bool end, bool atomicack, bool sched_priority
 );
 
 #endif

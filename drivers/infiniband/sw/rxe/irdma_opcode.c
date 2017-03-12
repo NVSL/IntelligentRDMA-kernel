@@ -230,7 +230,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_MIDDLE, "IB_OPCODE_RC_SEND_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -243,7 +244,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_LAST, "IB_OPCODE_RC_SEND_LAST",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -256,7 +258,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_LAST_WITH_IMMEDIATE, "IB_OPCODE_RC_SEND_LAST_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -269,7 +272,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_ONLY, "IB_OPCODE_RC_SEND_ONLY",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -282,7 +286,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_ONLY_WITH_IMMEDIATE, "IB_OPCODE_RC_SEND_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -295,7 +300,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_WRITE_FIRST, "IB_OPCODE_RC_RDMA_WRITE_FIRST",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -308,7 +314,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_WRITE_MIDDLE, "IB_OPCODE_RC_RDMA_WRITE_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -321,7 +328,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_WRITE_LAST, "IB_OPCODE_RC_RDMA_WRITE_LAST",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -334,7 +342,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_WRITE_LAST_WITH_IMMEDIATE, "IB_OPCODE_RC_RDMA_WRITE_LAST_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -347,7 +356,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_WRITE_ONLY, "IB_OPCODE_RC_RDMA_WRITE_ONLY",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -360,7 +370,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_WRITE_ONLY_WITH_IMMEDIATE, "IB_OPCODE_RC_RDMA_WRITE_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -373,7 +384,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_READ_REQUEST, "IB_OPCODE_RC_RDMA_READ_REQUEST",
       /*.irdma_op_num    = */ IRDMA_READ,
@@ -386,7 +398,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ true
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST, "IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -399,7 +412,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE, "IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -412,7 +426,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST, "IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -425,7 +440,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY, "IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -438,7 +454,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_ACKNOWLEDGE, "IB_OPCODE_RC_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -451,7 +468,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE, "IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -464,7 +482,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ true
+      /*.atomicack       = */ true,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_COMPARE_SWAP, "IB_OPCODE_RC_COMPARE_SWAP",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
@@ -477,7 +496,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_FETCH_ADD, "IB_OPCODE_RC_FETCH_ADD",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
@@ -490,7 +510,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_LAST_WITH_INVALIDATE, "IB_OPCODE_RC_SEND_LAST_WITH_INVALIDATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -503,7 +524,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RC_SEND_ONLY_WITH_INVALIDATE, "IB_OPCODE_RC_SEND_ONLY_WITH_INVALIDATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -516,7 +538,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,  // shouldn't this be TRUE?
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
 
   /* UC */
@@ -531,7 +554,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_SEND_MIDDLE, "IB_OPCODE_UC_SEND_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -544,7 +568,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_SEND_LAST, "IB_OPCODE_UC_SEND_LAST",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -557,7 +582,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_SEND_LAST_WITH_IMMEDIATE, "IB_OPCODE_UC_SEND_LAST_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -570,7 +596,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_SEND_ONLY, "IB_OPCODE_UC_SEND_ONLY",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -583,7 +610,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_SEND_ONLY_WITH_IMMEDIATE, "IB_OPCODE_UC_SEND_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -596,7 +624,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_RDMA_WRITE_FIRST, "IB_OPCODE_UC_RDMA_WRITE_FIRST",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -609,7 +638,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_RDMA_WRITE_MIDDLE, "IB_OPCODE_UC_RDMA_WRITE_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -622,7 +652,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_RDMA_WRITE_LAST, "IB_OPCODE_UC_RDMA_WRITE_LAST",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -635,7 +666,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_RDMA_WRITE_LAST_WITH_IMMEDIATE, "IB_OPCODE_UC_RDMA_WRITE_LAST_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -648,7 +680,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_RDMA_WRITE_ONLY, "IB_OPCODE_UC_RDMA_WRITE_ONLY",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -661,7 +694,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UC_RDMA_WRITE_ONLY_WITH_IMMEDIATE, "IB_OPCODE_UC_RDMA_WRITE_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -674,7 +708,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
 
   /* UD */
@@ -689,7 +724,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE, "IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -702,7 +738,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
 
   /* RD */
@@ -723,7 +760,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_SEND_MIDDLE, "IB_OPCODE_RD_SEND_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -736,7 +774,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_SEND_LAST, "IB_OPCODE_RD_SEND_LAST",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -749,7 +788,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_SEND_LAST_WITH_IMMEDIATE, "IB_OPCODE_RD_SEND_LAST_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -762,7 +802,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_SEND_ONLY, "IB_OPCODE_RD_SEND_ONLY",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -775,7 +816,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_SEND_ONLY_WITH_IMMEDIATE, "IB_OPCODE_RD_SEND_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
@@ -788,7 +830,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_WRITE_FIRST, "IB_OPCODE_RD_RDMA_WRITE_FIRST",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -801,7 +844,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_WRITE_MIDDLE, "IB_OPCODE_RD_RDMA_WRITE_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -814,7 +858,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_WRITE_LAST, "IB_OPCODE_RD_RDMA_WRITE_LAST",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -827,7 +872,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_WRITE_LAST_WITH_IMMEDIATE, "IB_OPCODE_RD_RDMA_WRITE_LAST_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -840,7 +886,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_WRITE_ONLY, "IB_OPCODE_RD_RDMA_WRITE_ONLY",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -853,7 +900,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_WRITE_ONLY_WITH_IMMEDIATE, "IB_OPCODE_RD_RDMA_WRITE_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
@@ -866,7 +914,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_READ_REQUEST, "IB_OPCODE_RD_RDMA_READ_REQUEST",
       /*.irdma_op_num    = */ IRDMA_READ,
@@ -879,7 +928,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_READ_RESPONSE_FIRST, "IB_OPCODE_RD_RDMA_READ_RESPONSE_FIRST",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -892,7 +942,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_READ_RESPONSE_MIDDLE, "IB_OPCODE_RD_RDMA_READ_RESPONSE_MIDDLE",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -905,7 +956,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ true,
       /*.end             = */ false,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_READ_RESPONSE_LAST, "IB_OPCODE_RD_RDMA_READ_RESPONSE_LAST",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -918,7 +970,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ false,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_RDMA_READ_RESPONSE_ONLY, "IB_OPCODE_RD_RDMA_READ_RESPONSE_ONLY",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -931,7 +984,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_ACKNOWLEDGE, "IB_OPCODE_RD_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -944,7 +998,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_ATOMIC_ACKNOWLEDGE, "IB_OPCODE_RD_ATOMIC_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
@@ -957,7 +1012,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ true
+      /*.atomicack       = */ true,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_COMPARE_SWAP, "IB_OPCODE_RD_COMPARE_SWAP",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
@@ -970,7 +1026,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_opcode(IB_OPCODE_RD_FETCH_ADD, "IB_OPCODE_RD_FETCH_ADD",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
@@ -983,7 +1040,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.start           = */ true,
       /*.middle          = */ false,
       /*.end             = */ true,
-      /*.atomicack       = */ false
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
   ))
 #endif  // if 0
 

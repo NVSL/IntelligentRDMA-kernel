@@ -51,7 +51,7 @@ register_opcode_status register_opcode(
     unsigned irdma_op_num,
     enum ib_qp_type qpt,
     bool immdt, bool payload, bool invalidate, bool requiresReceive, bool postComplete,
-    bool start, bool middle, bool end, bool atomicack
+    bool start, bool middle, bool end, bool atomicack, bool sched_priority
 ) {
   enum rxe_hdr_mask mask;
   if(unlikely(opcode_num >= RXE_NUM_OPCODE)) return OPCODE_INVALID;
@@ -81,6 +81,7 @@ register_opcode_status register_opcode(
     | SET_IF(start, RXE_START_MASK)
     | SET_IF(middle, RXE_MIDDLE_MASK)
     | SET_IF(end, RXE_END_MASK)
+    | SET_IF(sched_priority, IRDMA_SCHED_PRIORITY_MASK)
         // RXE_RETH_MASK indicates whether the packet needs an 'RDMA extended transport header'.
         // The rule here reflects existing convention.
     | SET_IF((irdma_op_num == IRDMA_READ || irdma_op_num == IRDMA_WRITE) && start, RXE_RETH_MASK)

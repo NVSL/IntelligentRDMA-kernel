@@ -115,7 +115,7 @@ void rxe_resp_queue_pkt(struct rxe_dev *rxe, struct rxe_qp *qp,
 
 	skb_queue_tail(&qp->req_pkts, skb);
 
-	must_sched = (pkt->opcode == IB_OPCODE_RC_RDMA_READ_REQUEST) ||
+	must_sched = (rxe_opcode[pkt->opcode].mask & IRDMA_SCHED_PRIORITY_MASK) ||
 			(skb_queue_len(&qp->req_pkts) > 1);
 
 	rxe_run_task(&qp->resp.task, must_sched);
