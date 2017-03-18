@@ -110,7 +110,7 @@ enum rxe_hdr_mask {
 #define RXE_NUM_OPCODE		256
 
 struct rxe_opcode_info {
-	char			  *name;
+	char			  name[64];
 	enum rxe_hdr_mask mask;
     unsigned          irdma_op_num;
     enum ib_qp_type   qpt;

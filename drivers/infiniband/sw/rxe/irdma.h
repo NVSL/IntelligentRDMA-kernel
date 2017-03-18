@@ -34,7 +34,7 @@ struct irdma_context {
 // 'ack'==TRUE indicates 'ack'-type irdma_ops (ones that would have RXE_ACK_MASK set)
 #define IRDMA_MAX_OPS 256
 struct irdma_op {
-  char* name;
+  char name[64];
   handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*);
   bool ack;
 };
@@ -54,14 +54,14 @@ extern struct irdma_op irdma_op[IRDMA_MAX_OPS];
 typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
 
 // irdma_op_num : the desired irdma_op_num (not already in use)
-// name : a name for this irdma_op
+// name : a name for this irdma_op (max 63 characters, cannot be "")
 // handle_func : a function to be called to handle incoming packets of this type
 //   (see also irdma_funcs.h)
 // ack : if TRUE, packets of this type will be treated as 'ack' packets
 //   better explanation TBD
 // returns :
 //   OPCODE_OK on success
-//   OPCODE_INVALID if irdma_op_num is outside allowed range
+//   OPCODE_INVALID if irdma_op_num is outside allowed range or if 'name' is too long
 //   OPCODE_IN_USE if the desired irdma_op_num is already in use
 register_opcode_status register_irdma_op(
     unsigned irdma_op_num,
@@ -71,7 +71,7 @@ register_opcode_status register_irdma_op(
 );
 
 // opcode_num : the desired opcode number (not already in use)
-// name : a name for the opcode
+// name : a name for the opcode (max 63 characters, cannot be "")
 // irdma_op_num : the number of the irdma_op for this opcode
 //   (previously registered with register_irdma_op)
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
@@ -94,7 +94,7 @@ register_opcode_status register_irdma_op(
 // returns :
 //   OPCODE_OK on success
 //   OPCODE_INVALID if opcode_num is outside allowed range, or irdma_op_num has not been registered,
-//     or if the combination of arguments passed is invalid
+//     or the 'name' string is too long, or if the combination of arguments passed is invalid
 //   OPCODE_IN_USE if the desired opcode_num is already in use
 register_opcode_status register_opcode(
     unsigned opcode_num,

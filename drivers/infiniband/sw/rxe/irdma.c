@@ -1,14 +1,15 @@
 #include "irdma.h"
+#include <linux/string.h>
 
 struct irdma_op irdma_op[IRDMA_MAX_OPS];
 
 void irdma_init(void) {
   unsigned i;
   for(i = 0; i < IRDMA_MAX_OPS; i++) {
-    irdma_op[i].name = NULL;  // mark as free
+    irdma_op[i].name[0] = '\0';  // mark as free
   }
   for(i = 0; i < RXE_NUM_OPCODE; i++) {
-    rxe_opcode[i].name = NULL;  // mark as free
+    rxe_opcode[i].name[0] = '\0';  // mark as free
   }
 }
 
@@ -19,8 +20,10 @@ register_opcode_status register_irdma_op(
     bool ack
 ) {
   if(irdma_op_num >= IRDMA_MAX_OPS) return OPCODE_INVALID;
-  if(irdma_op[irdma_op_num].name) return OPCODE_IN_USE;  // assume that name==NULL indicates free
-  irdma_op[irdma_op_num].name = name;
+  if(strlen(name) > 63) return OPCODE_INVALID;
+  if(!name[0]) return OPCODE_INVALID;
+  if(irdma_op[irdma_op_num].name[0]) return OPCODE_IN_USE;  // name=="" indicates free
+  strcpy(irdma_op[irdma_op_num].name, name);
   irdma_op[irdma_op_num].handle_func = handle_func;
   irdma_op[irdma_op_num].ack = ack;
   return OPCODE_OK;
@@ -66,12 +69,14 @@ register_opcode_status register_opcode(
 ) {
   enum rxe_hdr_mask mask;
   if(unlikely(opcode_num >= RXE_NUM_OPCODE)) return OPCODE_INVALID;
-  if(unlikely(rxe_opcode[opcode_num].name)) return OPCODE_IN_USE;  // assume that name==NULL indicates free
-  if(unlikely(!irdma_op[irdma_op_num].name)) return OPCODE_INVALID;
+  if(unlikely(!name[0])) return OPCODE_INVALID;
+  if(unlikely(rxe_opcode[opcode_num].name[0])) return OPCODE_IN_USE;  // name=="" indicates free
+  if(unlikely(!irdma_op[irdma_op_num].name[0])) return OPCODE_INVALID;
   if(unlikely(atomicack && !irdma_op[irdma_op_num].ack)) return OPCODE_INVALID;
   if(unlikely(immdt && invalidate)) return OPCODE_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
+  if(unlikely(strlen(name) > 63)) return OPCODE_INVALID;
 #define SET_IF(cond, set_what) \
   ( (cond) ? (set_what) : 0 )
   mask = 
@@ -116,7 +121,7 @@ register_opcode_status register_opcode(
         // in a flexible way that allows multiple (custom) irdma_ops to be 'ack's.
         // However, for now we just set it for IRDMA_ACK packets
   ;
-  rxe_opcode[opcode_num].name = name;
+  strcpy(rxe_opcode[opcode_num].name, name);
   rxe_opcode[opcode_num].mask = mask;
   rxe_opcode[opcode_num].irdma_op_num = irdma_op_num;
   rxe_opcode[opcode_num].qpt = qpt;
