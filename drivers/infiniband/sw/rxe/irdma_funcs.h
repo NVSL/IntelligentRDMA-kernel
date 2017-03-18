@@ -10,6 +10,8 @@ struct irdma_mem {
 
 // Gets a new 'resource'
 struct resp_res* get_new_resource(struct irdma_context* ic);
+// Gets an existing 'resource' by psn, or NULL if not found
+struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn);
 
 // Sends a packet with the specified opcode_num (previously registered with register_opcode)
 // E.g. you can use this to send an 'ack' packet in response to received packet
@@ -23,4 +25,14 @@ int send_packet(
 		struct rxe_pkt_info* cur_pkt,
     u8 syndrome,
     u32 psn
+);
+
+// This function assumes that everything is already initialized and ready to go
+// It can be used to resend packets (and it's also used internally by send_packet() above)
+int send_packet_raw(
+    struct irdma_context* ic,
+    struct rxe_pkt_info* pkt,
+    struct sk_buff* skb,
+    struct rxe_dev* rxe,
+    bool atomicack
 );

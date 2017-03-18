@@ -8,6 +8,19 @@ struct resp_res* get_new_resource(struct irdma_context* ic) {
   return res;
 }
 
+struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn) {
+  int i;
+  for(i = 0; i < ic->qp->attr.max_rd_atomic; i++) {
+    struct resp_res *res = &ic->qp->resp.resources[i];
+    if(res->type == 0) continue;
+    if(psn_compare(psn, res->first_psn) >= 0 &&
+       psn_compare(psn, res->last_psn) <= 0) {
+      return res;
+    }
+  }
+  return NULL;
+}
+
 int send_packet(
     struct irdma_context* ic,
     unsigned opcode_num,
@@ -18,9 +31,7 @@ int send_packet(
 ) {
   struct rxe_pkt_info new_pkt;
   struct sk_buff *skb;
-  struct sk_buff *skb_copy;
   struct rxe_dev *rxe = to_rdev(ic->qp->ibqp.device);
-  struct resp_res *res;
 	u32 crc = 0;
   int err;
   u32* p;
@@ -77,6 +88,22 @@ int send_packet(
 	p = payload_addr(&new_pkt) + payload->length + bth_pad(&new_pkt);
 	*p = ~crc;
 
+  err = send_packet_raw(ic, &new_pkt, skb, rxe, atomicack);
+  if(err) pr_err_ratelimited("Failed sending packet with opcode %s\n", rxe_opcode[opcode_num].name);
+
+  return err;
+}
+
+int send_packet_raw(
+    struct irdma_context* ic,
+    struct rxe_pkt_info* pkt,
+    struct sk_buff* skb,
+    struct rxe_dev* rxe,
+    bool atomicack
+) {
+  struct resp_res *res;
+  struct sk_buff *skb_copy;
+  int err;
   if(atomicack) {
     skb_copy = skb_clone(skb, GFP_ATOMIC);
     if(skb_copy) {
@@ -86,21 +113,18 @@ int send_packet(
       return -ENOMEM;
     }
     res = get_new_resource(ic);
-    memcpy(SKB_TO_PKT(skb), &new_pkt, sizeof(skb->cb));
+    memcpy(SKB_TO_PKT(skb), pkt, sizeof(skb->cb));
     res->type = IRDMA_ATOMIC;
     res->atomic.skb = skb;
-    res->first_psn = new_pkt.psn;
-    res->last_psn = new_pkt.psn;
-    res->cur_psn = new_pkt.psn;
-  }
-    
-  err = rxe_xmit_packet(rxe, ic->qp, &new_pkt, atomicack ? skb_copy : skb);
-  if(err) {
-    pr_err_ratelimited("Failed sending response packet with opcode %s\n", rxe_opcode[opcode_num].name);
-    if(atomicack) rxe_drop_ref(ic->qp);
-    kfree_skb(atomicack ? skb_copy : skb);
-    return err;
+    res->first_psn = pkt->psn;
+    res->last_psn = pkt->psn;
+    res->cur_psn = pkt->psn;
   }
 
-	return err;
+  err = rxe_xmit_packet(rxe, ic->qp, pkt, atomicack ? skb_copy : skb);
+  if(err) {
+    if(atomicack) rxe_drop_ref(ic->qp);
+    kfree_skb(atomicack ? skb_copy : skb);
+  }
+  return err;
 }

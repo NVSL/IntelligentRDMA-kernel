@@ -5,7 +5,7 @@
 
 void irdma_init(void);
 
-// handle_status is the return type of the handle_func for an irdma_op.
+// handle_incoming_status is the return type of the handle_incoming function for an irdma_op.
 typedef enum {
   OK = 0,  // indicates no error
   ERROR_LENGTH,  // indicates that copy_data returned -ENOSPC
@@ -17,9 +17,17 @@ typedef enum {
          // Note that OK should usually be used instead - with OK, a bunch of bookkeeping is done to
          // complete the processing of this packet and prepare for the next.
          // DONE indicates that you've already done all this yourself.
-} handle_status;
+} handle_incoming_status;
 
-// an irdma_context (along with info about the received packet) is passed to the handle_func for an irdma_op
+// handle_duplicate_status is the return type of the handle_duplicate function for an irdma_op.
+typedef enum {
+  HANDLED,    // duplicate packet has been handled, we're done
+  REPROCESS,  // please now reprocess the duplicate packet (with handle_incoming) and proceed from
+              //   there based on the return code from handle_incoming, as normal
+} handle_duplicate_status;
+
+// an irdma_context (along with info about the received packet) is passed to the handle_incoming
+//   function for an irdma_op
 struct irdma_context {
   struct rxe_qp* qp;
 };
@@ -35,7 +43,8 @@ struct irdma_context {
 #define IRDMA_MAX_OPS 256
 struct irdma_op {
   char name[64];
-  handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*);
+  handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*);
+  handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*);
   bool ack;
 };
 extern struct irdma_op irdma_op[IRDMA_MAX_OPS];
@@ -55,7 +64,9 @@ typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status
 
 // irdma_op_num : the desired irdma_op_num (not already in use)
 // name : a name for this irdma_op (max 63 characters, cannot be "")
-// handle_func : a function to be called to handle incoming packets of this type
+// handle_incoming : a function to be called to handle incoming packets of this type
+//   (see also irdma_funcs.h)
+// handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
 //   (see also irdma_funcs.h)
 // ack : if TRUE, packets of this type will be treated as 'ack' packets
 //   better explanation TBD
@@ -66,7 +77,8 @@ typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status
 register_opcode_status register_irdma_op(
     unsigned irdma_op_num,
     char* name,
-    handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*),
+    handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
+    handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     bool ack
 );
 

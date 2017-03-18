@@ -148,7 +148,7 @@ static inline enum resp_states get_req(struct rxe_qp *qp,
 	if(qp->resp.res) {
 		struct rxe_pkt_info* pkt = *pkt_p;
 		struct irdma_context ic = { qp };
-		handle_status hs = irdma_op[pkt->irdma_op_num].handle_func(&ic, pkt);
+		handle_incoming_status hs = irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt);
     switch(hs) {
       case ERROR_LENGTH: return RESPST_ERR_LENGTH;
       case ERROR_MALFORMED_WQE: return RESPST_ERR_MALFORMED_WQE;
@@ -535,7 +535,7 @@ err1:
 static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 {
 	struct irdma_context ic = { qp };
-	handle_status hs = irdma_op[pkt->irdma_op_num].handle_func(&ic, pkt);
+	handle_incoming_status hs = irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt);
     switch(hs) {
       case ERROR_LENGTH: return RESPST_ERR_LENGTH;
       case ERROR_MALFORMED_WQE: return RESPST_ERR_MALFORMED_WQE;
@@ -709,130 +709,31 @@ static enum resp_states cleanup(struct rxe_qp *qp,
 	return RESPST_DONE;
 }
 
-static struct resp_res *find_resource(struct rxe_qp *qp, u32 psn)
-{
-	int i;
-
-	for (i = 0; i < qp->attr.max_rd_atomic; i++) {
-		struct resp_res *res = &qp->resp.resources[i];
-
-		if (res->type == 0)
-			continue;
-
-		if (psn_compare(psn, res->first_psn) >= 0 &&
-		    psn_compare(psn, res->last_psn) <= 0) {
-			return res;
-		}
-	}
-
-	return NULL;
-}
-
 static enum resp_states duplicate_request(struct rxe_qp *qp,
 					  struct rxe_pkt_info *pkt)
 {
-	enum resp_states rc;
-	u32 prev_psn = (qp->resp.psn - 1) & BTH_PSN_MASK;
 	struct irdma_context ic = { qp };
 
-	if (pkt->irdma_op_num == IRDMA_SEND ||
-	    pkt->irdma_op_num == IRDMA_WRITE) {
-		/* SEND. Ack again and cleanup. C9-105. */
-		if (bth_ack(pkt))
-			send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, prev_psn);
-		rc = RESPST_CLEANUP;
-		goto out;
-	} else if (pkt->irdma_op_num == IRDMA_READ) {
-		struct resp_res *res;
-
-		res = find_resource(qp, pkt->psn);
-		if (!res) {
-			/* Resource not found. Class D error.  Drop the
-			 * request.
-			 */
-			rc = RESPST_CLEANUP;
-			goto out;
-		} else {
-			/* Ensure this new request is the same as the previous
-			 * one or a subset of it.
-			 */
-			u64 iova = reth_va(pkt);
-			u32 resid = reth_len(pkt);
-			struct irdma_context ic = { qp };
-			handle_status hs;
-
-			if (iova < res->read.va_org ||
-			    resid > res->read.length ||
-			    (iova + resid) > (res->read.va_org +
-					      res->read.length)) {
-				rc = RESPST_CLEANUP;
-				goto out;
-			}
-
-			if (reth_rkey(pkt) != res->read.rkey) {
-				rc = RESPST_CLEANUP;
-				goto out;
-			}
-
-			res->cur_psn = pkt->psn;
-			res->state = (pkt->psn == res->first_psn) ?
-					rdatm_res_state_new :
-					rdatm_res_state_replay;
-
-			/* Reset the resource, except length. */
-			res->read.va_org = iova;
-			res->read.va = iova;
-			res->read.resid = resid;
-
-			/* Replay the RDMA read reply. */
-			qp->resp.res = res;
-			hs = irdma_op[pkt->irdma_op_num].handle_func(&ic, pkt);
-			switch(hs) {
-				case ERROR_LENGTH: return RESPST_ERR_LENGTH;
-				case ERROR_MALFORMED_WQE: return RESPST_ERR_MALFORMED_WQE;
-				case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
-				case ERROR_RNR: return RESPST_ERR_RNR;
-				case ERROR_MISALIGNED_ATOMIC: return RESPST_ERR_MISALIGNED_ATOMIC;
-				case DONE: return RESPST_DONE;
-				case OK: break;
-				default: /* Unreachable */ WARN_ON(1);
-			}
-		}
-	} else {
-		struct resp_res *res;
-
-		/* Find the operation in our list of responder resources. */
-		res = find_resource(qp, pkt->psn);
-		if (res) {
-			struct sk_buff *skb_copy;
-
-			skb_copy = skb_clone(res->atomic.skb, GFP_ATOMIC);
-			if (skb_copy) {
-				rxe_add_ref(qp); /* for the new SKB */
-			} else {
-				pr_warn("Couldn't clone atomic resp\n");
-				rc = RESPST_CLEANUP;
-				goto out;
-			}
-
-			/* Resend the result. */
-			rc = rxe_xmit_packet(to_rdev(qp->ibqp.device), qp,
-					     pkt, skb_copy);
-			if (rc) {
-				pr_err("Failed resending result. This flow is not handled - skb ignored\n");
-				rxe_drop_ref(qp);
-				kfree_skb(skb_copy);
-				rc = RESPST_CLEANUP;
-				goto out;
-			}
-		}
-
-		/* Resource not found. Class D error. Drop the request. */
-		rc = RESPST_CLEANUP;
-		goto out;
-	}
-out:
-	return rc;
+    switch(irdma_op[pkt->irdma_op_num].handle_duplicate(&ic, pkt)) {
+      case HANDLED:
+        return RESPST_CLEANUP;
+      case REPROCESS:
+        switch(irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt)) {
+          case ERROR_LENGTH: return RESPST_ERR_LENGTH;
+          case ERROR_MALFORMED_WQE: return RESPST_ERR_MALFORMED_WQE;
+          case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
+          case ERROR_RNR: return RESPST_ERR_RNR;
+          case ERROR_MISALIGNED_ATOMIC: return RESPST_ERR_MISALIGNED_ATOMIC;
+          case DONE: return RESPST_DONE;
+          case OK:
+            // This never happened in existing code, but I guess just clean up
+            return RESPST_CLEANUP;
+          default: /* Unreachable */ WARN_ON(1); return RESPST_CLEANUP;
+        }
+      default:
+        pr_warn("Missed a case of handle_duplicate_status\n");
+        return RESPST_CLEANUP;
+    }
 }
 
 /* Process a class A or C. Both are treated the same in this implementation. */

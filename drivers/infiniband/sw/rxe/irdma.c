@@ -16,7 +16,8 @@ void irdma_init(void) {
 register_opcode_status register_irdma_op(
     unsigned irdma_op_num,
     char* name,
-    handle_status (*handle_func)(struct irdma_context*, struct rxe_pkt_info*),
+    handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
+    handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     bool ack
 ) {
   if(irdma_op_num >= IRDMA_MAX_OPS) return OPCODE_INVALID;
@@ -24,7 +25,8 @@ register_opcode_status register_irdma_op(
   if(!name[0]) return OPCODE_INVALID;
   if(irdma_op[irdma_op_num].name[0]) return OPCODE_IN_USE;  // name=="" indicates free
   strcpy(irdma_op[irdma_op_num].name, name);
-  irdma_op[irdma_op_num].handle_func = handle_func;
+  irdma_op[irdma_op_num].handle_incoming = handle_incoming;
+  irdma_op[irdma_op_num].handle_duplicate = handle_duplicate;
   irdma_op[irdma_op_num].ack = ack;
   return OPCODE_OK;
 }

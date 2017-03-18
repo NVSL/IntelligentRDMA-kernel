@@ -18,12 +18,8 @@
 #define IRDMA_ATOMIC 4
 #endif
 
-// handle_funcs and their helpers
-static handle_status handle_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
-  // TODO
-  return OK;
-}
-
+// ****************************
+// 'Helpers' used farther below
 static void build_rdma_network_hdr(union rdma_network_hdr *hdr,
 				   struct rxe_pkt_info *pkt)
 {
@@ -36,7 +32,7 @@ static void build_rdma_network_hdr(union rdma_network_hdr *hdr,
 		memcpy(&hdr->ibgrh, ipv6_hdr(skb), sizeof(hdr->ibgrh));
 }
 
-static handle_status send_data_in(struct irdma_context *ic, void *data_addr,
+static handle_incoming_status send_data_in(struct irdma_context *ic, void *data_addr,
 				     int data_len)
 {
 	int err;
@@ -51,36 +47,8 @@ static handle_status send_data_in(struct irdma_context *ic, void *data_addr,
 	return OK;
 }
 
-static handle_status handle_send(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
-  handle_status err;
-  if (qp_type(ic->qp) == IB_QPT_UD ||
-      qp_type(ic->qp) == IB_QPT_SMI ||
-      qp_type(ic->qp) == IB_QPT_GSI) {
-      union rdma_network_hdr hdr;
-
-      build_rdma_network_hdr(&hdr, pkt);
-
-      err = send_data_in(ic, &hdr, sizeof(hdr));
-      if (err) return err;
-  }
-  return send_data_in(ic, payload_addr(pkt), payload_size(pkt));
-}
-
-static handle_status handle_write(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
-	int	err;
-	int data_len = payload_size(pkt);
-
-	err = rxe_mem_copy(ic->qp->resp.mr, ic->qp->resp.va, payload_addr(pkt),
-			   data_len, to_mem_obj, NULL);
-	if (err) {
-		return ERROR_RKEY_VIOLATION;
-	}
-
-	ic->qp->resp.va += data_len;
-	ic->qp->resp.resid -= data_len;
-
-	return OK;
-}
+/* Guarantee atomicity of atomic operations at the machine level. */
+static DEFINE_SPINLOCK(atomic_ops_lock);
 
 static void cleanup(struct rxe_qp *qp,
 				struct rxe_pkt_info *pkt)
@@ -99,7 +67,45 @@ static void cleanup(struct rxe_qp *qp,
 	}
 }
 
-static handle_status handle_read(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+// ****************************
+// handle_incoming funcs
+static handle_incoming_status handle_incoming_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  // TODO
+  return OK;
+}
+
+static handle_incoming_status handle_incoming_send(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  handle_incoming_status err;
+  if (qp_type(ic->qp) == IB_QPT_UD ||
+      qp_type(ic->qp) == IB_QPT_SMI ||
+      qp_type(ic->qp) == IB_QPT_GSI) {
+      union rdma_network_hdr hdr;
+
+      build_rdma_network_hdr(&hdr, pkt);
+
+      err = send_data_in(ic, &hdr, sizeof(hdr));
+      if (err) return err;
+  }
+  return send_data_in(ic, payload_addr(pkt), payload_size(pkt));
+}
+
+static handle_incoming_status handle_incoming_write(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+	int	err;
+	int data_len = payload_size(pkt);
+
+	err = rxe_mem_copy(ic->qp->resp.mr, ic->qp->resp.va, payload_addr(pkt),
+			   data_len, to_mem_obj, NULL);
+	if (err) {
+		return ERROR_RKEY_VIOLATION;
+	}
+
+	ic->qp->resp.va += data_len;
+	ic->qp->resp.resid -= data_len;
+
+	return OK;
+}
+
+static handle_incoming_status handle_incoming_read(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
 	int mtu = ic->qp->mtu;
     struct irdma_mem payload;
 	int opcode;
@@ -172,10 +178,7 @@ static handle_status handle_read(struct irdma_context* ic, struct rxe_pkt_info* 
 	}
 }
 
-/* Guarantee atomicity of atomic operations at the machine level. */
-static DEFINE_SPINLOCK(atomic_ops_lock);
-
-static handle_status handle_atomic(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
 	u64 iova = atmeth_va(pkt);
 	u64 *vaddr;
 	struct rxe_mem *mr = ic->qp->resp.mr;
@@ -208,17 +211,79 @@ static handle_status handle_atomic(struct irdma_context* ic, struct rxe_pkt_info
 	return OK;
 }
 
+// ****************************
+// handle_duplicate funcs
+static handle_duplicate_status handle_duplicate_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  // TODO
+  return HANDLED;
+}
+
+static handle_duplicate_status handle_duplicate_sendorwrite(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  // Ack again and cleanup. C9-105.
+  if(bth_ack(pkt)) send_packet(ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, (ic->qp->resp.psn-1) & BTH_PSN_MASK);
+  return HANDLED;
+}
+
+static handle_duplicate_status handle_duplicate_read(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  struct resp_res *res = get_existing_resource(ic, pkt->psn);
+  if(!res) {
+    // Resource not found, Class D error.  Drop the request.
+    return HANDLED;
+  } else {
+    // Ensure this new request is the same as the previous one or a subset of it.
+    u64 iova = reth_va(pkt);
+    u32 resid = reth_len(pkt);
+    if(iova < res->read.va_org ||
+        resid > res->read.length ||
+        (iova + resid) > (res->read.va_org + res->read.length)) {
+      return HANDLED;
+    }
+
+    if(reth_rkey(pkt) != res->read.rkey) return HANDLED;
+    res->cur_psn = pkt->psn;
+    res->state = (pkt->psn == res->first_psn) ? rdatm_res_state_new : rdatm_res_state_replay;
+
+    // Reset the resource, except length.
+    res->read.va_org = iova;
+    res->read.va = iova;
+    res->read.resid = resid;
+
+    // Replay the RDMA read reply.
+    ic->qp->resp.res = res;
+    return REPROCESS;
+  }
+}
+
+static handle_duplicate_status handle_duplicate_atomic(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  // Find the operation in our list of responder resources.
+  struct resp_res *res = get_existing_resource(ic, pkt->psn);
+  if(!res) {
+    // Resource not found, Class D error.  Drop the request.
+    return HANDLED;
+  } else {
+    send_packet_raw(ic, pkt, res->atomic.skb, to_rdev(ic->qp->ibqp.device), true);
+    return HANDLED;
+  }
+}
+
+// ****************************
+// register irdma_ops and rxe_opcodes
 register_opcode_status irdma_init_opcodes(void) {
   register_opcode_status st;
 #define WITH_CHECK(expr) \
   st = expr; \
   if(st) return st;
 
-  WITH_CHECK(register_irdma_op(IRDMA_ACK, "IRDMA_ACK", &handle_ack, true))
-  WITH_CHECK(register_irdma_op(IRDMA_SEND, "IRDMA_SEND", &handle_send, false))
-  WITH_CHECK(register_irdma_op(IRDMA_WRITE, "IRDMA_WRITE", &handle_write, false))
-  WITH_CHECK(register_irdma_op(IRDMA_READ, "IRDMA_READ", &handle_read, false))
-  WITH_CHECK(register_irdma_op(IRDMA_ATOMIC, "IRDMA_ATOMIC", &handle_atomic, false))
+  WITH_CHECK(register_irdma_op(IRDMA_ACK, "IRDMA_ACK",
+        &handle_incoming_ack, &handle_duplicate_ack, true))
+  WITH_CHECK(register_irdma_op(IRDMA_SEND, "IRDMA_SEND",
+        &handle_incoming_send, &handle_duplicate_sendorwrite, false))
+  WITH_CHECK(register_irdma_op(IRDMA_WRITE, "IRDMA_WRITE",
+        &handle_incoming_write, &handle_duplicate_sendorwrite, false))
+  WITH_CHECK(register_irdma_op(IRDMA_READ, "IRDMA_READ",
+        &handle_incoming_read, &handle_duplicate_read, false))
+  WITH_CHECK(register_irdma_op(IRDMA_ATOMIC, "IRDMA_ATOMIC",
+        &handle_incoming_atomic, &handle_duplicate_atomic, false))
   WITH_CHECK(register_opcode_series(
       IB_OPCODE_RC_SEND_FIRST,
       IB_OPCODE_RC_SEND_MIDDLE,
