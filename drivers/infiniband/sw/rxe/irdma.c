@@ -70,7 +70,7 @@ register_opcode_status register_opcode(
   if(unlikely(!irdma_op[irdma_op_num].name)) return OPCODE_INVALID;
   if(unlikely(atomicack && !irdma_op[irdma_op_num].ack)) return OPCODE_INVALID;
 #define SET_IF(cond, set_what) \
-  ( (cond) ? (set_what) : (! (set_what) ) )
+  ( (cond) ? (set_what) : 0 )
   mask = 
         // RXE_LRH_MASK and RXE_BTH_MASK are not set by any existing opcodes.
       SET_IF(false, RXE_LRH_MASK)
