@@ -77,14 +77,14 @@ register_opcode_status register_irdma_op(
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // immdt : whether the packet includes an immediate value to be presented to the receiver
 //   'immdt' and 'invalidate' cannot both be TRUE.
-// payload : whether the packet contains a payload
 // invalidate : whether the packet should (in addition to whatever else it does) 'invalidate'
 //   a remote memory region.  'immdt' and 'invalidate' cannot both be TRUE.
 // requiresReceive : whether the operation requires that the receiver has posted a 'receive' WQE
+//   If immdt==TRUE, requiresReceive must be TRUE.
+//   TODO: also if invalidate==TRUE?
 // postComplete : whether a 'cqe' should be posted to the completion queue upon operation completion
-// start, middle, end : whether the packet is the first, middle, or last of a series
-//   if the packet is the only in a series, then under some circumstances you should set
-//   both 'start' and 'end' (but not 'middle').  Better explanation TBD
+//   If immdt==TRUE, postComplete must be TRUE.
+//   TODO: also if invalidate==TRUE?
 // atomicack : set to TRUE iff the packet is an ack/response to an IRDMA_ATOMIC operation
 //   (in this case irdma_op_num should have been registered with ack==TRUE)
 // sched_priority : to my current understanding, setting this to TRUE instructs the
@@ -96,13 +96,102 @@ register_opcode_status register_irdma_op(
 //   OPCODE_INVALID if opcode_num is outside allowed range, or irdma_op_num has not been registered,
 //     or the 'name' string is too long, or if the combination of arguments passed is invalid
 //   OPCODE_IN_USE if the desired opcode_num is already in use
-register_opcode_status register_opcode(
+register_opcode_status register_single_opcode(
     unsigned opcode_num,
     char* name,
     unsigned irdma_op_num,
     enum ib_qp_type qpt,
-    bool immdt, bool payload, bool invalidate, bool requiresReceive, bool postComplete,
-    bool start, bool middle, bool end, bool atomicack, bool sched_priority
+    bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
+    bool atomicack, bool sched_priority
+);
+
+enum ynb { YES, NO, BOTH };
+
+// Sometimes you want to transmit information that is (or may be) too large for a single packet.
+// To do this, you need an "opcode series", which has four opcodes, indicating the
+// 'start', 'middle', 'end', or 'only' of a series, respectively.
+// Then, if you wanted to send a series of 5 packets, you would send them in the order
+// 'start', 'middle', 'middle', 'middle', 'end'.
+// A series of 3 packets would be 'start', 'middle', 'end'.
+// A series of 2 packets would be 'start', 'end' omitting 'middle'.
+// Finally, for the instance where all your data fits in a single packet, we have the 'only' packet.
+// Arguments:
+//   *_opcode_num: the four opcode numbers you wish to register
+//   basename: basename for the opcodes; "_start" etc will be appended to form the individual names
+//     This means the basename must be max 56 characters, if immdt==NO and invalidate==NO;
+//     max 47 characters, if immdt==NO and invalidate==YES/BOTH;
+//     or max 45 characters, if immdt==YES/BOTH
+//   irdma_op_num: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   qpt: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   immdt: whether the series includes an immediate value to be presented to the receiver.
+//     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the immediate.
+//     If YES, the 'end' and 'only' opcodes carry an immediate.  If NO, they don't.
+//     If BOTH, then two different versions of the 'end' and 'only' opcodes will be registered;
+//       versions without an immediate will be registered under end_opcode_num and only_opcode_num,
+//       whereas versions with an immediate will be registered under
+//       end_opcode_num_immdt and only_opcode_num_immdt.
+//     See also below, 'immdt--invalidate restriction'
+//   end_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
+//   only_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
+//   invalidate : whether the packet should (in addition to whatever else it does) 'invalidate'
+//     a remote memory region.
+//     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the invalidate.
+//     If YES, the 'end' and 'only' opcodes carry an invalidate.  If NO, they don't.
+//     If BOTH, then two different versions of the 'end' and 'only' opcodes will be registered;
+//     versions without an invalidate will be registered under end_opcode_num and only_opcode_num,
+//     whereas versions with an invalidate will be registered under
+//     end_opcode_num_inv and only_opcode_num_inv.
+//     See also below, 'immdt-invalidate restriction'
+//   end_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
+//   only_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
+//   requiresReceive : whether the operation requires that the receiver has posted a 'receive' WQE
+//     The 'receive' WQE will be required for opcodes which start the series (i.e. 'start' and 'only').
+//     If requiresReceive==FALSE but the series carries an immediate, a 'receive' WQE will still be required,
+//     but in this case for the opcodes which end the series (i.e. 'end' and 'only').
+//     TODO: Unclear if we should handle requiresReceive==FALSE + invalidate similarly?
+//       No examples of that case in the existing opcodes
+//       Provisionally, I'm letting the requiresReceive==FALSE hold even for series carrying invalidates
+//   postComplete : whether a 'cqe' should be posted to the completion queue upon operation completion
+//     The 'cqe' will be posted with the opcodes which end the series (i.e. 'end' and 'only').
+//     If immdt==YES, postComplete must be TRUE.  If immdt==BOTH, the value of this argument applies for
+//     the non-immediate version of the series; the immediate version will implicitly have postComplete==TRUE
+//     TODO: Unclear if we should handle invalidate==YES or invalidate==BOTH similarly?
+//       No examples of postComplete==FALSE + invalidate==YES/BOTH in the existing opcodes
+//       Provisionally, I'm treating invalidate==YES/BOTH like immdt==YES/BOTH for postComplete
+//   atomicack : set to TRUE iff the series is an ack/response to an IRDMA_ATOMIC operation
+//     (in this case irdma_op_num should have been registered with ack==TRUE)
+//   sched_priority : to my current understanding, setting this to TRUE instructs the
+//     internal scheduler to always handle incoming packets from this series immediately,
+//     pushing aside other tasks (e.g. posting sends, completes, etc).
+//     In existing code, no series gets this treatment (only the single opcode IB_OPCODE_RC_RDMA_READ_REQUEST).
+// immdt-invalidate restriction:
+//   If either 'immdt' or 'invalidate' is YES, the other must be NO.
+//   If both 'immdt' and 'invalidate' are BOTH, a total of three versions of the series will be registered:
+//     one carrying neither immediate nor invalidate (registered under end_opcode_num and only_opcode_num)
+//     one carrying just an immediate (registered under end_opcode_num_immdt and only_opcode_num_immdt)
+//     one carrying just an invalidate (registered under end_opcode_num_inv and only_opcode_num_inv)
+//   In particular, no series may carry both an immediate and an invalidate.
+// returns:
+//   OPCODE_OK on success
+//   OPCODE_INVALID if any of the opcode_nums are outside allowed range, or irdma_op_num has not been 
+//     registered, or the 'basename' string is too long, or if the combination of arguments passed is invalid
+//     In this case there is no guarantee given as to which of the series opcodes may or may not have
+//     been successfully registered; the only guarantee is that the state remains consistent
+//     i.e. each opcode is either fully registered or fully not.
+//   OPCODE_IN_USE if any of the opcode_nums were already in use
+//     In this case, all the requested opcode_nums which were not already in use are guaranteed to be
+//     properly registered before this function returns.
+register_opcode_status register_opcode_series(
+    unsigned start_opcode_num,
+    unsigned middle_opcode_num,
+    unsigned end_opcode_num,
+    unsigned only_opcode_num,
+    char* basename,
+    unsigned irdma_op_num,
+    enum ib_qp_type qpt,
+    enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt,
+    enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv,
+    bool requiresReceive, bool postComplete, bool atomicack, bool sched_priority
 );
 
 #endif

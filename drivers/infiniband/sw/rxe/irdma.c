@@ -59,13 +59,16 @@ static void computeOffset(struct rxe_opcode_info* info) {
   //   and furthermore we can't (don't know payload length)
 }
 
-register_opcode_status register_opcode(
+// internal register_opcode function, used by the public-facing 'register_single_opcode' and
+//   'register_opcode_series'
+static register_opcode_status __register_opcode(
     unsigned opcode_num,
     char* name,
     unsigned irdma_op_num,
     enum ib_qp_type qpt,
-    bool immdt, bool payload, bool invalidate, bool requiresReceive, bool postComplete,
-    bool start, bool middle, bool end, bool atomicack, bool sched_priority
+    bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
+    bool atomicack, bool sched_priority,
+    /* internal arguments */ bool start, bool middle, bool end
 ) {
   enum rxe_hdr_mask mask;
   if(unlikely(opcode_num >= RXE_NUM_OPCODE)) return OPCODE_INVALID;
@@ -76,6 +79,8 @@ register_opcode_status register_opcode(
   if(unlikely(immdt && invalidate)) return OPCODE_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
+  if(unlikely(immdt && !requiresReceive)) return OPCODE_INVALID;
+  if(unlikely(immdt && !postComplete)) return OPCODE_INVALID;
   if(unlikely(strlen(name) > 63)) return OPCODE_INVALID;
 #define SET_IF(cond, set_what) \
   ( (cond) ? (set_what) : 0 )
@@ -89,7 +94,9 @@ register_opcode_status register_opcode(
     | SET_IF(false, RXE_LOOPBACK_MASK)
         // These mask bits must (currently) be indicated by the user; more explanation in irdma.h
     | SET_IF(immdt, RXE_IMMDT_MASK)
-    | SET_IF(payload, RXE_PAYLOAD_MASK)  // appears to never be used for anything in existing code
+    // | SET_IF(payload, RXE_PAYLOAD_MASK)  // appears to never be used for anything in existing code
+        // RXE_PAYLOAD_MASK was set for all opcodes in a series, plus the UD_SEND_ONLY opcodes,
+        // and not for any other opcodes.
     | SET_IF(invalidate, RXE_IETH_MASK)
     | SET_IF(requiresReceive, RXE_RWR_MASK)
     | SET_IF(postComplete, RXE_COMP_MASK)
@@ -137,4 +144,184 @@ register_opcode_status register_opcode(
   ;
   computeOffset(&rxe_opcode[opcode_num]);
   return OPCODE_OK;
+}
+
+register_opcode_status register_single_opcode(
+  unsigned opcode_num,
+  char* name,
+  unsigned irdma_op_num,
+  enum ib_qp_type qpt,
+  bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
+  bool atomicack, bool sched_priority
+) {
+  return __register_opcode(
+      opcode_num,
+      name,
+      irdma_op_num,
+      qpt,
+      immdt, invalidate, requiresReceive, postComplete,
+      atomicack, sched_priority,
+      /* start    = */ true,   /* \                           */
+      /* middle   = */ false,  /*  |--  (treat as an 'only')  */
+      /* end      = */ true    /* /                           */
+      );
+}
+
+// Set a to the 'min', where the order is OPCODE_INVALID < OPCODE_IN_USE < OPCODE_OK
+static void compound(register_opcode_status* a, register_opcode_status b) {
+  if(*a==OPCODE_INVALID) return;
+  if(b==OPCODE_OK) return;
+  if(*a==OPCODE_OK) {*a = b; return;}
+  if(b==OPCODE_INVALID) {*a = b; return;}
+  return;  // both are OPCODE_IN_USE
+}
+
+register_opcode_status register_opcode_series(
+  unsigned start_opcode_num,
+  unsigned middle_opcode_num,
+  unsigned end_opcode_num,
+  unsigned only_opcode_num,
+  char* basename,
+  unsigned irdma_op_num,
+  enum ib_qp_type qpt,
+  enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt,
+  enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv,
+  bool requiresReceive, bool postComplete, bool atomicack, bool sched_priority
+) {
+  register_opcode_status ret = OPCODE_OK;
+  size_t len = strlen(basename);
+  char startname[64], middlename[64], endname[64], onlyname[64];
+  char endname_immdt[64], onlyname_immdt[64], endname_inv[64], onlyname_inv[64];
+  if(unlikely(len > 56 || len == 0)) return OPCODE_INVALID;
+  if(unlikely(invalidate!=NO && len > 47)) return OPCODE_INVALID;
+  if(unlikely(immdt!=NO && len > 45)) return OPCODE_INVALID;
+  if(unlikely(immdt==YES && invalidate!=NO)) return OPCODE_INVALID;
+  if(unlikely(invalidate==YES && immdt!=NO)) return OPCODE_INVALID;
+  if(unlikely(immdt==YES && !postComplete)) return OPCODE_INVALID;
+  if(unlikely(invalidate==YES && !postComplete)) return OPCODE_INVALID;
+  strcpy(startname, basename);
+  strcpy(middlename, basename);
+  strcpy(endname, basename);
+  strcpy(onlyname, basename);
+  if(immdt==YES) {
+    strcat(endname, "_with_immdt");  // throughout, one tiny way we're altering the functionality of the
+    strcat(onlyname, "_with_immdt"); // existing code is that these constructed names will be slightly
+                                     // different than the names that were previously used
+  } else if(immdt==BOTH) {
+    strcpy(endname_immdt, basename);
+    strcpy(onlyname_immdt, basename);
+    strcat(endname_immdt, "_with_immdt");
+    strcat(onlyname_immdt, "_with_immdt");
+  }
+  if(invalidate==YES) {
+    strcat(endname, "_with_inv");
+    strcat(onlyname, "_with_inv");
+  } else if(invalidate==BOTH) {
+    strcpy(endname_inv, basename);
+    strcpy(onlyname_inv, basename);
+    strcat(endname_inv, "_with_inv");
+    strcat(onlyname_inv, "_with_inv");
+  }
+  compound(&ret, __register_opcode(
+      start_opcode_num, startname, irdma_op_num, qpt,
+      /* immdt           = */ false,
+      /* invalidate      = */ false,
+      /* requiresReceive = */ requiresReceive,
+      /* postComplete    = */ false,
+      atomicack, sched_priority,
+      /* start           = */ true,
+      /* middle          = */ false,
+      /* end             = */ false
+      ));
+  if(ret==OPCODE_INVALID) return ret;
+  compound(&ret, __register_opcode(
+      middle_opcode_num, middlename, irdma_op_num, qpt,
+      /* immdt           = */ false,
+      /* invalidate      = */ false,
+      /* requiresReceive = */ false,
+      /* postComplete    = */ false,
+      atomicack, sched_priority,
+      /* start           = */ false,
+      /* middle          = */ true,
+      /* end             = */ false
+      ));
+  if(ret==OPCODE_INVALID) return ret;
+  compound(&ret, __register_opcode(
+      end_opcode_num, endname, irdma_op_num, qpt,
+      /* immdt           = */ (immdt==YES),
+      /* invalidate      = */ (invalidate==YES),
+      /* requiresReceive = */ (immdt==YES),
+      /* postComplete    = */ postComplete,
+      atomicack, sched_priority,
+      /* start           = */ false,
+      /* middle          = */ false,
+      /* end             = */ true
+      ));
+  if(ret==OPCODE_INVALID) return ret;
+  compound(&ret, __register_opcode(
+      only_opcode_num, onlyname, irdma_op_num, qpt,
+      /* immdt           = */ (immdt==YES),
+      /* invalidate      = */ (invalidate==YES),
+      /* requiresReceive = */ requiresReceive || (immdt==YES),
+      /* postComplete    = */ postComplete,
+      atomicack, sched_priority,
+      /* start           = */ true,
+      /* middle          = */ false,
+      /* end             = */ true
+      ));
+  if(ret==OPCODE_INVALID) return ret;
+  if(immdt==BOTH) {
+    compound(&ret, __register_opcode(
+        end_opcode_num_immdt, endname_immdt, irdma_op_num, qpt,
+        /* immdt           = */ true,
+        /* invalidate      = */ false,
+        /* requiresReceive = */ !requiresReceive,
+        /* postComplete    = */ true,
+        atomicack, sched_priority,
+        /* start           = */ false,
+        /* middle          = */ false,
+        /* end             = */ true
+      ));
+    if(ret==OPCODE_INVALID) return ret;
+    compound(&ret, __register_opcode(
+        only_opcode_num_immdt, onlyname_immdt, irdma_op_num, qpt,
+        /* immdt           = */ true,
+        /* invalidate      = */ false,
+        /* requiresReceive = */ true,
+        /* postComplete    = */ true,
+        atomicack, sched_priority,
+        /* start           = */ true,
+        /* middle          = */ false,
+        /* end             = */ true
+        ));
+    if(ret==OPCODE_INVALID) return ret;
+  }
+  if(invalidate==BOTH) {
+    compound(&ret, __register_opcode(
+        end_opcode_num_inv, endname_inv, irdma_op_num, qpt,
+        /* immdt           = */ false,
+        /* invalidate      = */ true,
+        /* requiresReceive = */ false,
+        /* postComplete    = */ true,
+        atomicack, sched_priority,
+        /* start           = */ false,
+        /* middle          = */ false,
+        /* end             = */ true
+        ));
+    if(ret==OPCODE_INVALID) return ret;
+    compound(&ret, __register_opcode(
+        only_opcode_num_inv, onlyname_inv, irdma_op_num, qpt,
+        /* immdt           = */ false,
+        /* invalidate      = */ true,
+        /* requiresReceive = */ requiresReceive,
+        /* postComplete    = */ true,
+        atomicack, sched_priority,
+        /* start           = */ true,  // the (one) existing ONLY_WITH_INVALIDATE opcode has 'false' here,
+                                       // but I'm assuming that's an error/typo
+        /* middle          = */ false,
+        /* end             = */ true
+        ));
+    if(ret==OPCODE_INVALID) return ret;
+  }
+  return ret;
 }
