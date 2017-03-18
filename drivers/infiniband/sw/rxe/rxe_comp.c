@@ -238,26 +238,21 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
 	u8 syn;
 
 	/* Check the sequence only */
-	switch (qp->comp.opcode) {
-	case -1:
-		/* Will catch all *_ONLY cases. */
-		if (!(mask & RXE_START_MASK))
-			return COMPST_ERROR;
+	if(qp->comp.opcode == -1) {
+      // Not in the middle of an operation, expecting a START opcode
+      // (note that single/ONLY opcodes also have RXE_START_MASK set)
+      if (!(mask & RXE_START_MASK)) return COMPST_ERROR;
+    } else {
+      // In the middle of an operation
+      if (mask & RXE_START_MASK) return COMPST_ERROR;  // can't start new operation
+      if(rxe_opcode[pkt->opcode].series_id != rxe_opcode[qp->comp.opcode].series_id) {
+        // opcodes are not from the same series
+        return COMPST_ERROR;
+      }
+    }
 
-		break;
+    /* Check operation validity. */
 
-	case IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST:
-	case IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE:
-		if (pkt->opcode != IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE &&
-		    pkt->opcode != IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST) {
-			return COMPST_ERROR;
-		}
-		break;
-	default:
-		WARN_ON(1);
-	}
-
-	/* Check operation validity. */
 	switch (pkt->opcode) {
 	case IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST:
 	case IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST:

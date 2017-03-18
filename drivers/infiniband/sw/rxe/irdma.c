@@ -63,6 +63,11 @@ static void computeOffset(struct rxe_opcode_info* info) {
 
 // internal register_opcode function, used by the public-facing 'register_single_opcode' and
 //   'register_opcode_series'
+// series_id: a series_id which must be shared among all members of the series
+//   'single' opcodes must have a unique series_id, not shared with any other opcode
+//   Internally, for the series_id we have been using:
+//     'series' opcodes: the 'start' opcode for the series
+//     'single' opcodes: the opcode itself
 static register_opcode_status __register_opcode(
     unsigned opcode_num,
     char* name,
@@ -70,7 +75,7 @@ static register_opcode_status __register_opcode(
     enum ib_qp_type qpt,
     bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
     bool atomicack, bool sched_priority,
-    /* internal arguments */ bool start, bool middle, bool end
+    /* internal arguments */ bool start, bool middle, bool end, unsigned series_id
 ) {
   enum rxe_hdr_mask mask;
   if(unlikely(opcode_num >= RXE_NUM_OPCODE)) return OPCODE_INVALID;
@@ -144,6 +149,7 @@ static register_opcode_status __register_opcode(
       + (mask & RXE_RDETH_MASK  ? RXE_RDETH_BYTES  : 0)
       + (mask & RXE_DETH_MASK   ? RXE_DETH_BYTES   : 0)
   ;
+  rxe_opcode[opcode_num].series_id = series_id;
   computeOffset(&rxe_opcode[opcode_num]);
   return OPCODE_OK;
 }
@@ -163,9 +169,10 @@ register_opcode_status register_single_opcode(
       qpt,
       immdt, invalidate, requiresReceive, postComplete,
       atomicack, sched_priority,
-      /* start    = */ true,   /* \                           */
-      /* middle   = */ false,  /*  |--  (treat as an 'only')  */
-      /* end      = */ true    /* /                           */
+      /* start     = */ true,   /* \                           */
+      /* middle    = */ false,  /*  |--  (treat as an 'only')  */
+      /* end       = */ true,   /* /                           */
+      /* series_id = */ opcode_num
       );
 }
 
@@ -233,7 +240,8 @@ register_opcode_status register_opcode_series(
       atomicack, sched_priority,
       /* start           = */ true,
       /* middle          = */ false,
-      /* end             = */ false
+      /* end             = */ false,
+      /* series_id       = */ start_opcode_num
       ));
   if(ret==OPCODE_INVALID) return ret;
   compound(&ret, __register_opcode(
@@ -245,7 +253,8 @@ register_opcode_status register_opcode_series(
       atomicack, sched_priority,
       /* start           = */ false,
       /* middle          = */ true,
-      /* end             = */ false
+      /* end             = */ false,
+      /* series_id       = */ start_opcode_num
       ));
   if(ret==OPCODE_INVALID) return ret;
   compound(&ret, __register_opcode(
@@ -257,7 +266,8 @@ register_opcode_status register_opcode_series(
       atomicack, sched_priority,
       /* start           = */ false,
       /* middle          = */ false,
-      /* end             = */ true
+      /* end             = */ true,
+      /* series_id       = */ start_opcode_num
       ));
   if(ret==OPCODE_INVALID) return ret;
   compound(&ret, __register_opcode(
@@ -269,7 +279,8 @@ register_opcode_status register_opcode_series(
       atomicack, sched_priority,
       /* start           = */ true,
       /* middle          = */ false,
-      /* end             = */ true
+      /* end             = */ true,
+      /* series_id       = */ start_opcode_num
       ));
   if(ret==OPCODE_INVALID) return ret;
   if(immdt==BOTH) {
@@ -282,7 +293,8 @@ register_opcode_status register_opcode_series(
         atomicack, sched_priority,
         /* start           = */ false,
         /* middle          = */ false,
-        /* end             = */ true
+        /* end             = */ true,
+        /* series_id       = */ start_opcode_num
       ));
     if(ret==OPCODE_INVALID) return ret;
     compound(&ret, __register_opcode(
@@ -294,7 +306,8 @@ register_opcode_status register_opcode_series(
         atomicack, sched_priority,
         /* start           = */ true,
         /* middle          = */ false,
-        /* end             = */ true
+        /* end             = */ true,
+        /* series_id       = */ start_opcode_num
         ));
     if(ret==OPCODE_INVALID) return ret;
   }
@@ -308,7 +321,8 @@ register_opcode_status register_opcode_series(
         atomicack, sched_priority,
         /* start           = */ false,
         /* middle          = */ false,
-        /* end             = */ true
+        /* end             = */ true,
+        /* series_id       = */ start_opcode_num
         ));
     if(ret==OPCODE_INVALID) return ret;
     compound(&ret, __register_opcode(
@@ -321,7 +335,8 @@ register_opcode_status register_opcode_series(
         /* start           = */ true,  // the (one) existing ONLY_WITH_INVALIDATE opcode has 'false' here,
                                        // but I'm assuming that's an error/typo
         /* middle          = */ false,
-        /* end             = */ true
+        /* end             = */ true,
+        /* series_id       = */ start_opcode_num
         ));
     if(ret==OPCODE_INVALID) return ret;
   }

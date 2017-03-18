@@ -160,7 +160,7 @@ static inline enum resp_states get_req(struct rxe_qp *qp,
       default: /* Unreachable */ WARN_ON(1);
     }
 		WARN_ON(1);  // Shouldn't reach this, because pkt->irdma_op_num should be
-								 // IRDMA_READ, and that handler should never return OK
+                     // IRDMA_READ, and that handler should never return OK
 	}
 
 	return RESPST_CHK_PSN;
@@ -210,91 +210,57 @@ static enum resp_states check_psn(struct rxe_qp *qp,
 static enum resp_states check_op_seq(struct rxe_qp *qp,
 				     struct rxe_pkt_info *pkt)
 {
-	switch (qp_type(qp)) {
-	case IB_QPT_RC:
-		switch (qp->resp.opcode) {
-		case IB_OPCODE_RC_SEND_FIRST:
-		case IB_OPCODE_RC_SEND_MIDDLE:
-			switch (pkt->opcode) {
-			case IB_OPCODE_RC_SEND_MIDDLE:
-			case IB_OPCODE_RC_SEND_LAST:
-			case IB_OPCODE_RC_SEND_LAST_WITH_IMMEDIATE:
-			case IB_OPCODE_RC_SEND_LAST_WITH_INVALIDATE:
-				return RESPST_CHK_OP_VALID;
-			default:
-				return RESPST_ERR_MISSING_OPCODE_LAST_C;
-			}
-
-		case IB_OPCODE_RC_RDMA_WRITE_FIRST:
-		case IB_OPCODE_RC_RDMA_WRITE_MIDDLE:
-			switch (pkt->opcode) {
-			case IB_OPCODE_RC_RDMA_WRITE_MIDDLE:
-			case IB_OPCODE_RC_RDMA_WRITE_LAST:
-			case IB_OPCODE_RC_RDMA_WRITE_LAST_WITH_IMMEDIATE:
-				return RESPST_CHK_OP_VALID;
-			default:
-				return RESPST_ERR_MISSING_OPCODE_LAST_C;
-			}
-
-		default:
-			switch (pkt->opcode) {
-			case IB_OPCODE_RC_SEND_MIDDLE:
-			case IB_OPCODE_RC_SEND_LAST:
-			case IB_OPCODE_RC_SEND_LAST_WITH_IMMEDIATE:
-			case IB_OPCODE_RC_SEND_LAST_WITH_INVALIDATE:
-			case IB_OPCODE_RC_RDMA_WRITE_MIDDLE:
-			case IB_OPCODE_RC_RDMA_WRITE_LAST:
-			case IB_OPCODE_RC_RDMA_WRITE_LAST_WITH_IMMEDIATE:
-				return RESPST_ERR_MISSING_OPCODE_FIRST;
-			default:
-				return RESPST_CHK_OP_VALID;
-			}
-		}
-		break;
-
-	case IB_QPT_UC:
-		switch (qp->resp.opcode) {
-		case IB_OPCODE_UC_SEND_FIRST:
-		case IB_OPCODE_UC_SEND_MIDDLE:
-			switch (pkt->opcode) {
-			case IB_OPCODE_UC_SEND_MIDDLE:
-			case IB_OPCODE_UC_SEND_LAST:
-			case IB_OPCODE_UC_SEND_LAST_WITH_IMMEDIATE:
-				return RESPST_CHK_OP_VALID;
-			default:
-				return RESPST_ERR_MISSING_OPCODE_LAST_D1E;
-			}
-
-		case IB_OPCODE_UC_RDMA_WRITE_FIRST:
-		case IB_OPCODE_UC_RDMA_WRITE_MIDDLE:
-			switch (pkt->opcode) {
-			case IB_OPCODE_UC_RDMA_WRITE_MIDDLE:
-			case IB_OPCODE_UC_RDMA_WRITE_LAST:
-			case IB_OPCODE_UC_RDMA_WRITE_LAST_WITH_IMMEDIATE:
-				return RESPST_CHK_OP_VALID;
-			default:
-				return RESPST_ERR_MISSING_OPCODE_LAST_D1E;
-			}
-
-		default:
-			switch (pkt->opcode) {
-			case IB_OPCODE_UC_SEND_MIDDLE:
-			case IB_OPCODE_UC_SEND_LAST:
-			case IB_OPCODE_UC_SEND_LAST_WITH_IMMEDIATE:
-			case IB_OPCODE_UC_RDMA_WRITE_MIDDLE:
-			case IB_OPCODE_UC_RDMA_WRITE_LAST:
-			case IB_OPCODE_UC_RDMA_WRITE_LAST_WITH_IMMEDIATE:
-				qp->resp.drop_msg = 1;
-				return RESPST_CLEANUP;
-			default:
-				return RESPST_CHK_OP_VALID;
-			}
-		}
-		break;
-
-	default:
-		return RESPST_CHK_OP_VALID;
-	}
+    unsigned int resp_mask = rxe_opcode[qp->resp.opcode].mask;
+    unsigned int this_mask = pkt->mask;
+    unsigned resp_series_id, this_series_id;
+    if(!(resp_mask & RXE_END_MASK)) {
+      // In the middle of an operation
+      if(this_mask & RXE_START_MASK) {
+        // Can't start new operation
+        switch(qp_type(qp)) {
+          case IB_QPT_RC: return RESPST_ERR_MISSING_OPCODE_LAST_C;
+          case IB_QPT_UC: return RESPST_ERR_MISSING_OPCODE_LAST_D1E;
+          default:
+            // Existing code never has this case, since all other QPTs
+            // do not have existing opcodes with RXE_END_MASK unset
+            // Provisionally, we'll handle this as UC does
+            return RESPST_ERR_MISSING_OPCODE_LAST_D1E;
+        }
+      }
+      resp_series_id = rxe_opcode[qp->resp.opcode].series_id;
+      this_series_id = rxe_opcode[pkt->opcode].series_id;
+      if(resp_series_id != this_series_id) {
+        // Can't switch series
+        switch(qp_type(qp)) {
+          case IB_QPT_RC: return RESPST_ERR_MISSING_OPCODE_LAST_C;
+          case IB_QPT_UC: return RESPST_ERR_MISSING_OPCODE_LAST_D1E;
+          default:
+            // Existing code never has this case, since all other QPTs
+            // do not have existing opcodes with RXE_END_MASK unset
+            // Provisionally, we'll handle this as UC does
+            return RESPST_ERR_MISSING_OPCODE_LAST_D1E;
+        }
+      }
+    } else {
+      // Not in the middle of an operation, expecting a START opcode
+      // (note that single/ONLY opcodes also have RXE_START_MASK set)
+      if(!(this_mask & RXE_START_MASK)) {
+        switch(qp_type(qp)) {
+          case IB_QPT_RC: return RESPST_ERR_MISSING_OPCODE_FIRST;
+          case IB_QPT_UC:
+            qp->resp.drop_msg = 1;
+            return RESPST_CLEANUP;
+          default:
+            // Existing code never has this case, since for all other QPTs,
+            // all existing opcodes have RXE_START_MASK set
+            // Provisionally, we'll handle this as UC does
+            qp->resp.drop_msg = 1;
+            return RESPST_CLEANUP;
+        }
+      }
+    }
+    // passed all necessary checks
+    return RESPST_CHK_OP_VALID;
 }
 
 static enum resp_states check_op_valid(struct rxe_qp *qp,

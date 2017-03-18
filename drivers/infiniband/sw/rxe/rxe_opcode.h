@@ -92,7 +92,7 @@ enum rxe_hdr_mask {
 	RXE_IETH_MASK		= BIT(RXE_IETH),
 	RXE_RDETH_MASK		= BIT(RXE_RDETH),
 	RXE_DETH_MASK		= BIT(RXE_DETH),
-	RXE_PAYLOAD_MASK	= BIT(RXE_PAYLOAD),
+	//RXE_PAYLOAD_MASK	= BIT(RXE_PAYLOAD),
 
     RXE_RWR_MASK		= BIT(NUM_HDR_TYPES + 0),
 	RXE_COMP_MASK		= BIT(NUM_HDR_TYPES + 1),
@@ -115,6 +115,7 @@ struct rxe_opcode_info {
     unsigned          irdma_op_num;
     enum ib_qp_type   qpt;
 	int			      length;
+    unsigned          series_id;
 	int			      offset[NUM_HDR_TYPES];
 };
 
