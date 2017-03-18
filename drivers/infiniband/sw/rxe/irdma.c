@@ -69,6 +69,9 @@ register_opcode_status register_opcode(
   if(unlikely(rxe_opcode[opcode_num].name)) return OPCODE_IN_USE;  // assume that name==NULL indicates free
   if(unlikely(!irdma_op[irdma_op_num].name)) return OPCODE_INVALID;
   if(unlikely(atomicack && !irdma_op[irdma_op_num].ack)) return OPCODE_INVALID;
+  if(unlikely(immdt && invalidate)) return OPCODE_INVALID;
+    // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
+    // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
 #define SET_IF(cond, set_what) \
   ( (cond) ? (set_what) : 0 )
   mask = 

@@ -76,8 +76,10 @@ register_opcode_status register_irdma_op(
 //   (previously registered with register_irdma_op)
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // immdt : whether the packet includes an immediate value to be presented to the receiver
+//   'immdt' and 'invalidate' cannot both be TRUE.
 // payload : whether the packet contains a payload
-// invalidate : whether the packet involves an 'invalidate' (better explanation TBD)
+// invalidate : whether the packet should (in addition to whatever else it does) 'invalidate'
+//   a remote memory region.  'immdt' and 'invalidate' cannot both be TRUE.
 // requiresReceive : whether the operation requires that the receiver has posted a 'receive' WQE
 // postComplete : whether a 'cqe' should be posted to the completion queue upon operation completion
 // start, middle, end : whether the packet is the first, middle, or last of a series
