@@ -3,6 +3,8 @@
 
 #include "rxe.h"
 
+void irdma_init(void);
+
 // handle_status is the return type of the handle_func for an irdma_op.
 typedef enum {
   OK = 0,  // indicates no error

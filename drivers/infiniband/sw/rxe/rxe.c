@@ -274,6 +274,9 @@ static int rxe_init(struct rxe_dev *rxe)
 	/* init default device parameters */
 	rxe_init_device_param(rxe);
 
+    /* init irdma resources */
+    irdma_init();
+
     /* register 'built-in' opcodes */
     st = irdma_init_opcodes();
     switch(st) {

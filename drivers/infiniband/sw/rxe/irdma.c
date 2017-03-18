@@ -2,6 +2,16 @@
 
 struct irdma_op irdma_op[IRDMA_MAX_OPS];
 
+void irdma_init(void) {
+  unsigned i;
+  for(i = 0; i < IRDMA_MAX_OPS; i++) {
+    irdma_op[i].name = NULL;  // mark as free
+  }
+  for(i = 0; i < RXE_NUM_OPCODE; i++) {
+    rxe_opcode[i].name = NULL;  // mark as free
+  }
+}
+
 register_opcode_status register_irdma_op(
     unsigned irdma_op_num,
     char* name,
@@ -10,7 +20,6 @@ register_opcode_status register_irdma_op(
 ) {
   if(irdma_op_num >= IRDMA_MAX_OPS) return OPCODE_INVALID;
   if(irdma_op[irdma_op_num].name) return OPCODE_IN_USE;  // assume that name==NULL indicates free
-    // TODO: should make sure that irdma_op is initialized s.t. this is the case
   irdma_op[irdma_op_num].name = name;
   irdma_op[irdma_op_num].handle_func = handle_func;
   irdma_op[irdma_op_num].ack = ack;
@@ -58,7 +67,6 @@ register_opcode_status register_opcode(
   enum rxe_hdr_mask mask;
   if(unlikely(opcode_num >= RXE_NUM_OPCODE)) return OPCODE_INVALID;
   if(unlikely(rxe_opcode[opcode_num].name)) return OPCODE_IN_USE;  // assume that name==NULL indicates free
-    // TODO: should make sure that rxe_opcode is initialized s.t. this is the case
   if(unlikely(!irdma_op[irdma_op_num].name)) return OPCODE_INVALID;
   if(unlikely(atomicack && !irdma_op[irdma_op_num].ack)) return OPCODE_INVALID;
 #define SET_IF(cond, set_what) \
