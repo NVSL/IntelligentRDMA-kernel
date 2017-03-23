@@ -69,7 +69,8 @@ typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status
 // handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
 //   (see also irdma_funcs.h)
 // ack : if TRUE, packets of this type will be treated as 'ack' packets
-//   better explanation TBD
+//   Among other things, 'ack' packets cannot be requested through a wr, so they
+//   do not need, and cannot have, an associated wr_opcode
 // returns :
 //   OPCODE_OK on success
 //   OPCODE_INVALID if irdma_op_num is outside allowed range or if 'name' is too long
@@ -82,10 +83,49 @@ register_opcode_status register_irdma_op(
     bool ack
 );
 
+// wr_opcode_num : the desired wr_opcode_num (not already in use)
+// name : a name for the wr_opcode (max 63 characters, cannot be "")
+// qpts : pointer to array of qp types this wr_opcode is compatible with
+// num_qpts : length of the qpts array (number of compatible qp types)
+// type : one of WR_SEND_MASK, WR_WRITE_MASK, WR_READ_MASK, WR_ATOMIC_MASK, or WR_REG_MASK
+//   Better explanation TBD
+// wr_inline : explanation TBD
+// wc_opcode : the wc_opcode associated with this wr_opcode
+//   that is, the opcode to place in the CQE for this wr
+// ack_opcode_num : the opcode_num of the 'ack' expected in response to this wr_opcode
+//   (previously registered either with register_single_opcode or register_opcode_series)
+//   if we expect an opcode series rather than a single opcode, supply the *start* opcode
+//     of the series as ack_opcode_num here.
+//   In any case the ack_opcode_num must have been registered with an irdma_op_num which 
+//     was registered with ack==TRUE (marking it as an 'ack' opcode).
+//   Also note that this opcode is what is expected on *successful* ack; NAKs are handled
+//     separately, and the ack_opcode_num does not affect the NAK process.
+// returns:
+//   OPCODE_OK on success
+//   OPCODE_INVALID if:
+//     - wr_opcode_num is outside allowed range
+//     - ack_opcode_num has not been registered, or was not registered as required above
+//     - the 'name' string is too long
+//   OPCODE_IN_USE if the desired wr_opcode_num is already in use
+register_opcode_status register_wr_opcode(
+    unsigned wr_opcode_num,
+    char* name,
+    enum ib_qp_type* qpts,
+    unsigned num_qpts,
+    enum rxe_wr_mask type,
+    bool wr_inline,
+    enum ib_wc_opcode wc_opcode,
+    unsigned ack_opcode_num
+);
+
 // opcode_num : the desired opcode number (not already in use)
 // name : a name for the opcode (max 63 characters, cannot be "")
 // irdma_op_num : the number of the irdma_op for this opcode
 //   (previously registered with register_irdma_op)
+// wr_opcode_num : the number of the wr_opcode_num for this opcode
+//   (previously registered with register_wr_opcode)
+//   wr_opcode_num is not required (in fact, ignored) if you specify an irdma_op_num which
+//   was registered with ack==TRUE.  (Ack opcodes can never be 'requested' through wr's.)
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // immdt : whether the packet includes an immediate value to be presented to the receiver
 //   'immdt' and 'invalidate' cannot both be TRUE.
@@ -105,13 +145,17 @@ register_opcode_status register_irdma_op(
 //   In existing code, only IB_OPCODE_RC_RDMA_READ_REQUEST gets this treatment.
 // returns :
 //   OPCODE_OK on success
-//   OPCODE_INVALID if opcode_num is outside allowed range, or irdma_op_num has not been registered,
-//     or the 'name' string is too long, or if the combination of arguments passed is invalid
+//   OPCODE_INVALID if:
+//     - opcode_num is outside allowed range
+//     - irdma_op_num or wr_opcode_num have not been registered
+//     - the 'name' string is too long
+//     - the combination of arguments passed is invalid
 //   OPCODE_IN_USE if the desired opcode_num is already in use
 register_opcode_status register_single_opcode(
     unsigned opcode_num,
     char* name,
     unsigned irdma_op_num,
+    unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
     bool atomicack, bool sched_priority
@@ -134,6 +178,7 @@ enum ynb { YES, NO, BOTH };
 //     max 47 characters, if immdt==NO and invalidate==YES/BOTH;
 //     or max 45 characters, if immdt==YES/BOTH
 //   irdma_op_num: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   wr_opcode_num: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   qpt: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   immdt: whether the series includes an immediate value to be presented to the receiver.
 //     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the immediate.
@@ -142,6 +187,8 @@ enum ynb { YES, NO, BOTH };
 //       versions without an immediate will be registered under end_opcode_num and only_opcode_num,
 //       whereas versions with an immediate will be registered under
 //       end_opcode_num_immdt and only_opcode_num_immdt.
+//       You also must supply a wr_opcode_num_immdt which will be used for the immediate-carrying
+//       version of the series (wr_opcode_num will be used for the non-immediate-carrying version).
 //     See also below, 'immdt--invalidate restriction'
 //   end_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
 //   only_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
@@ -150,9 +197,11 @@ enum ynb { YES, NO, BOTH };
 //     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the invalidate.
 //     If YES, the 'end' and 'only' opcodes carry an invalidate.  If NO, they don't.
 //     If BOTH, then two different versions of the 'end' and 'only' opcodes will be registered;
-//     versions without an invalidate will be registered under end_opcode_num and only_opcode_num,
-//     whereas versions with an invalidate will be registered under
-//     end_opcode_num_inv and only_opcode_num_inv.
+//       versions without an invalidate will be registered under end_opcode_num and only_opcode_num,
+//       whereas versions with an invalidate will be registered under
+//       end_opcode_num_inv and only_opcode_num_inv.
+//       You also must supply a wr_opcode_num_inv which will be used for the invalidate-carrying
+//       version of the series (wr_opcode_num will be used for the non-invalidate-carrying version).
 //     See also below, 'immdt-invalidate restriction'
 //   end_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
 //   only_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
@@ -179,18 +228,24 @@ enum ynb { YES, NO, BOTH };
 // immdt-invalidate restriction:
 //   If either 'immdt' or 'invalidate' is YES, the other must be NO.
 //   If both 'immdt' and 'invalidate' are BOTH, a total of three versions of the series will be registered:
-//     one carrying neither immediate nor invalidate (registered under end_opcode_num and only_opcode_num)
-//     one carrying just an immediate (registered under end_opcode_num_immdt and only_opcode_num_immdt)
-//     one carrying just an invalidate (registered under end_opcode_num_inv and only_opcode_num_inv)
+//     one carrying neither immediate nor invalidate
+//       (registered under end_opcode_num and only_opcode_num, with wr_opcode_num)
+//     one carrying just an immediate
+//       (registered under end_opcode_num_immdt and only_opcode_num_immdt, with wr_opcode_immdt)
+//     one carrying just an invalidate
+//       (registered under end_opcode_num_inv and only_opcode_num_inv, with wr_opcode_inv)
 //   In particular, no series may carry both an immediate and an invalidate.
 // returns:
 //   OPCODE_OK on success
-//   OPCODE_INVALID if any of the opcode_nums are outside allowed range, or irdma_op_num has not been 
-//     registered, or the 'basename' string is too long, or if the combination of arguments passed is invalid
+//   OPCODE_INVALID if:
+//     - any of the opcode_nums (the ones that are not ignored per the rules above) are outside allowed range
+//     - irdma_op_num or any of the (not-ignored) wr_opcode_nums have not been registered
+//     - the 'basename' string is too long
+//     - the combination of arguments passed is invalid
 //     In this case there is no guarantee given as to which of the series opcodes may or may not have
 //     been successfully registered; the only guarantee is that the state remains consistent
 //     i.e. each opcode is either fully registered or fully not.
-//   OPCODE_IN_USE if any of the opcode_nums were already in use
+//   OPCODE_IN_USE if any of the (not-ignored) opcode_nums were already in use
 //     In this case, all the requested opcode_nums which were not already in use are guaranteed to be
 //     properly registered before this function returns.
 register_opcode_status register_opcode_series(
@@ -200,9 +255,10 @@ register_opcode_status register_opcode_series(
     unsigned only_opcode_num,
     char* basename,
     unsigned irdma_op_num,
+    unsigned wr_opcode_num,
     enum ib_qp_type qpt,
-    enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt,
-    enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv,
+    enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
+    enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
     bool requiresReceive, bool postComplete, bool atomicack, bool sched_priority
 );
 

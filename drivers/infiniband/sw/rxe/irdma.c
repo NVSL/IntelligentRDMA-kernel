@@ -8,6 +8,9 @@ void irdma_init(void) {
   for(i = 0; i < IRDMA_MAX_OPS; i++) {
     irdma_op[i].name[0] = '\0';  // mark as free
   }
+  for(i = 0; i < IRDMA_MAX_WR_OPCODES; i++) {
+    rxe_wr_opcode_info[i].name[0] = '\0';  // mark as free
+  }
   for(i = 0; i < RXE_NUM_OPCODE; i++) {
     rxe_opcode[i].name[0] = '\0';  // mark as free
   }
@@ -28,6 +31,40 @@ register_opcode_status register_irdma_op(
   irdma_op[irdma_op_num].handle_incoming = handle_incoming;
   irdma_op[irdma_op_num].handle_duplicate = handle_duplicate;
   irdma_op[irdma_op_num].ack = ack;
+  return OPCODE_OK;
+}
+
+register_opcode_status register_wr_opcode(
+    unsigned wr_opcode_num,
+    char* name,
+    enum ib_qp_type* qpts,
+    unsigned num_qpts,
+    enum rxe_wr_mask type,
+    bool wr_inline,
+    enum ib_wc_opcode wc_opcode,
+    unsigned ack_opcode_num
+) {
+  unsigned i;
+  struct rxe_opcode_info ack_opcode_info = rxe_opcode[ack_opcode_num];
+  if(wr_opcode_num >= IRDMA_MAX_WR_OPCODES) return OPCODE_INVALID;
+  if(strlen(name) > 63) return OPCODE_INVALID;
+  if(!name[0]) return OPCODE_INVALID;
+  if(rxe_wr_opcode_info[wr_opcode_num].name[0]) return OPCODE_IN_USE;  // name=="" indicates free
+  if(!ack_opcode_info.name[0]) return OPCODE_INVALID;
+  if(!irdma_op[ack_opcode_info.irdma_op_num].ack) return OPCODE_INVALID;
+  if(!(ack_opcode_info.mask & RXE_START_MASK)) return OPCODE_INVALID;
+    // the above line doesn't catch all restrictions we wish to make on the
+    // properties of ack_opcode_info, but it will at least catch some mistakes
+    // (The properties we require are that ack_opcode is either a single opcode,
+    // or the 'start' opcode of a series; the above line will also pass
+    // opcodes which are 'only' components of a series)
+  strcpy(rxe_wr_opcode_info[wr_opcode_num].name, name);
+  for(i = 0; i < num_qpts; i++) {
+    rxe_wr_opcode_info[wr_opcode_num].mask[qpts[i]] =
+      (wr_inline ? WR_INLINE_MASK : 0) | type;
+  }
+  rxe_wr_opcode_info[wr_opcode_num].wc_opcode = wc_opcode;
+  rxe_wr_opcode_info[wr_opcode_num].ack_opcode_num = ack_opcode_num;
   return OPCODE_OK;
 }
 
@@ -63,26 +100,29 @@ static void computeOffset(struct rxe_opcode_info* info) {
 
 // internal register_opcode function, used by the public-facing 'register_single_opcode' and
 //   'register_opcode_series'
-// series_id: a series_id which must be shared among all members of the series
-//   'single' opcodes must have a unique series_id, not shared with any other opcode
-//   Internally, for the series_id we have been using:
-//     'series' opcodes: the 'start' opcode for the series
-//     'single' opcodes: the opcode itself
+// series_id:
+//   For 'series' opcodes: the 'start' opcode for the series
+//   For 'single' opcodes: the opcode itself
+//   We choose this assignment so that a series_id is shared among all members of the series
+//   and 'single' opcodes have a unique series_id, not shared with any other opcode (series or not)
 static register_opcode_status __register_opcode(
     unsigned opcode_num,
     char* name,
     unsigned irdma_op_num,
+    unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
     bool atomicack, bool sched_priority,
     /* internal arguments */ bool start, bool middle, bool end, unsigned series_id
 ) {
   enum rxe_hdr_mask mask;
+  bool ack = irdma_op[irdma_op_num].ack;
   if(unlikely(opcode_num >= RXE_NUM_OPCODE)) return OPCODE_INVALID;
   if(unlikely(!name[0])) return OPCODE_INVALID;
   if(unlikely(rxe_opcode[opcode_num].name[0])) return OPCODE_IN_USE;  // name=="" indicates free
   if(unlikely(!irdma_op[irdma_op_num].name[0])) return OPCODE_INVALID;
-  if(unlikely(atomicack && !irdma_op[irdma_op_num].ack)) return OPCODE_INVALID;
+  if(unlikely(!ack && !rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
+  if(unlikely(!ack && atomicack)) return OPCODE_INVALID;
   if(unlikely(immdt && invalidate)) return OPCODE_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
@@ -116,7 +156,7 @@ static register_opcode_status __register_opcode(
     | SET_IF((irdma_op_num == IRDMA_READ || irdma_op_num == IRDMA_WRITE) && start, RXE_RETH_MASK)
         // RXE_AETH_MASK indicates whether the packet needs an 'ack extended transport header'.
         // The rule here reflects existing convention.
-    | SET_IF(irdma_op_num == IRDMA_ACK && !middle, RXE_AETH_MASK)
+    | SET_IF(ack && !middle, RXE_AETH_MASK)
         // RXE_ATMETH_MASK indicates whether the packet needs an 'atomic extended transport header'.
         // The rule here reflects existing convention.
     | SET_IF(irdma_op_num == IRDMA_ATOMIC, RXE_ATMETH_MASK)
@@ -130,14 +170,12 @@ static register_opcode_status __register_opcode(
     | SET_IF(false /*qpt == IB_QPT_RD*/, RXE_RDETH_MASK)
         // RXE_DETH_MASK indicates whether the packet needs a 'datagram extended transport header'.
         // The rule here reflects existing convention.
-    | SET_IF((false /*qpt == IB_QPT_RD*/ || qpt == IB_QPT_UD) && irdma_op_num != IRDMA_ACK, RXE_DETH_MASK)
-        // Invented this solely so that one can distinguish 'ack' packets from non-ack,
-        // in a flexible way that allows multiple (custom) irdma_ops to be 'ack's.
-        // However, for now we just set it for IRDMA_ACK packets
+    | SET_IF((false /*qpt == IB_QPT_RD*/ || qpt == IB_QPT_UD) && !ack, RXE_DETH_MASK)
   ;
   strcpy(rxe_opcode[opcode_num].name, name);
   rxe_opcode[opcode_num].mask = mask;
   rxe_opcode[opcode_num].irdma_op_num = irdma_op_num;
+  rxe_opcode[opcode_num].wr_opcode_num = ack ? 0 : wr_opcode_num;
   rxe_opcode[opcode_num].qpt = qpt;
   rxe_opcode[opcode_num].length = RXE_BTH_BYTES
       + (mask & RXE_IMMDT_MASK  ? RXE_IMMDT_BYTES  : 0)
@@ -158,6 +196,7 @@ register_opcode_status register_single_opcode(
   unsigned opcode_num,
   char* name,
   unsigned irdma_op_num,
+  unsigned wr_opcode_num,
   enum ib_qp_type qpt,
   bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
   bool atomicack, bool sched_priority
@@ -166,6 +205,7 @@ register_opcode_status register_single_opcode(
       opcode_num,
       name,
       irdma_op_num,
+      wr_opcode_num,
       qpt,
       immdt, invalidate, requiresReceive, postComplete,
       atomicack, sched_priority,
@@ -192,9 +232,10 @@ register_opcode_status register_opcode_series(
   unsigned only_opcode_num,
   char* basename,
   unsigned irdma_op_num,
+  unsigned wr_opcode_num,
   enum ib_qp_type qpt,
-  enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt,
-  enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv,
+  enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
+  enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
   bool requiresReceive, bool postComplete, bool atomicack, bool sched_priority
 ) {
   register_opcode_status ret = OPCODE_OK;
@@ -232,7 +273,7 @@ register_opcode_status register_opcode_series(
     strcat(onlyname_inv, "_with_inv");
   }
   compound(&ret, __register_opcode(
-      start_opcode_num, startname, irdma_op_num, qpt,
+      start_opcode_num, startname, irdma_op_num, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
       /* requiresReceive = */ requiresReceive,
@@ -245,7 +286,7 @@ register_opcode_status register_opcode_series(
       ));
   if(ret==OPCODE_INVALID) return ret;
   compound(&ret, __register_opcode(
-      middle_opcode_num, middlename, irdma_op_num, qpt,
+      middle_opcode_num, middlename, irdma_op_num, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
       /* requiresReceive = */ false,
@@ -258,7 +299,7 @@ register_opcode_status register_opcode_series(
       ));
   if(ret==OPCODE_INVALID) return ret;
   compound(&ret, __register_opcode(
-      end_opcode_num, endname, irdma_op_num, qpt,
+      end_opcode_num, endname, irdma_op_num, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
       /* requiresReceive = */ (immdt==YES),
@@ -271,7 +312,7 @@ register_opcode_status register_opcode_series(
       ));
   if(ret==OPCODE_INVALID) return ret;
   compound(&ret, __register_opcode(
-      only_opcode_num, onlyname, irdma_op_num, qpt,
+      only_opcode_num, onlyname, irdma_op_num, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
       /* requiresReceive = */ requiresReceive || (immdt==YES),
@@ -285,7 +326,7 @@ register_opcode_status register_opcode_series(
   if(ret==OPCODE_INVALID) return ret;
   if(immdt==BOTH) {
     compound(&ret, __register_opcode(
-        end_opcode_num_immdt, endname_immdt, irdma_op_num, qpt,
+        end_opcode_num_immdt, endname_immdt, irdma_op_num, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
         /* requiresReceive = */ !requiresReceive,
@@ -298,7 +339,7 @@ register_opcode_status register_opcode_series(
       ));
     if(ret==OPCODE_INVALID) return ret;
     compound(&ret, __register_opcode(
-        only_opcode_num_immdt, onlyname_immdt, irdma_op_num, qpt,
+        only_opcode_num_immdt, onlyname_immdt, irdma_op_num, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
         /* requiresReceive = */ true,
@@ -313,7 +354,7 @@ register_opcode_status register_opcode_series(
   }
   if(invalidate==BOTH) {
     compound(&ret, __register_opcode(
-        end_opcode_num_inv, endname_inv, irdma_op_num, qpt,
+        end_opcode_num_inv, endname_inv, irdma_op_num, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
         /* requiresReceive = */ false,
@@ -326,7 +367,7 @@ register_opcode_status register_opcode_series(
         ));
     if(ret==OPCODE_INVALID) return ret;
     compound(&ret, __register_opcode(
-        only_opcode_num_inv, onlyname_inv, irdma_op_num, qpt,
+        only_opcode_num_inv, onlyname_inv, irdma_op_num, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
         /* requiresReceive = */ requiresReceive,

@@ -93,7 +93,7 @@ static void req_retry(struct rxe_qp *qp)
 
 		wqe->iova = (mask & WR_ATOMIC_MASK) ?
 			     wqe->wr.wr.atomic.remote_addr :
-			     (mask & WR_READ_OR_WRITE_MASK) ?
+			     (mask & WR_READ_MASK || mask & WR_WRITE_MASK) ?
 			     wqe->wr.wr.rdma.remote_addr :
 			     0;
 
@@ -106,7 +106,7 @@ static void req_retry(struct rxe_qp *qp)
 		if (first) {
 			first = 0;
 
-			if (mask & WR_WRITE_OR_SEND_MASK)
+			if (mask & WR_WRITE_MASK || mask & WR_SEND_MASK)
 				retry_first_write_send(qp, wqe, mask, npsn);
 
 			if (mask & WR_READ_MASK)

@@ -46,23 +46,21 @@ enum rxe_wr_mask {
 	WR_SEND_MASK			= BIT(2),
 	WR_READ_MASK			= BIT(3),
 	WR_WRITE_MASK			= BIT(4),
-	WR_LOCAL_MASK			= BIT(5),
+	//WR_LOCAL_MASK			= BIT(5),  // never used in existing code
 	WR_REG_MASK			= BIT(6),
-
-	WR_READ_OR_WRITE_MASK		= WR_READ_MASK | WR_WRITE_MASK,
-	WR_READ_WRITE_OR_SEND_MASK	= WR_READ_OR_WRITE_MASK | WR_SEND_MASK,
-	WR_WRITE_OR_SEND_MASK		= WR_WRITE_MASK | WR_SEND_MASK,
-	WR_ATOMIC_OR_READ_MASK		= WR_ATOMIC_MASK | WR_READ_MASK,
 };
 
 #define WR_MAX_QPT		(8)
 
 struct rxe_wr_opcode_info {
-	char			*name;
+	char			    *name;
 	enum rxe_wr_mask	mask[WR_MAX_QPT];
+    enum ib_wc_opcode   wc_opcode;
+    unsigned            ack_opcode_num;
 };
 
-extern struct rxe_wr_opcode_info rxe_wr_opcode_info[];
+#define IRDMA_MAX_WR_OPCODES 32
+extern struct rxe_wr_opcode_info rxe_wr_opcode_info[IRDMA_MAX_WR_OPCODES];
 
 enum rxe_hdr_type {
 	RXE_LRH,
@@ -113,6 +111,7 @@ struct rxe_opcode_info {
 	char			  name[64];
 	enum rxe_hdr_mask mask;
     unsigned          irdma_op_num;
+    unsigned          wr_opcode_num;
     enum ib_qp_type   qpt;
 	int			      length;
     unsigned          series_id;

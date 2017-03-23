@@ -267,13 +267,21 @@ static handle_duplicate_status handle_duplicate_atomic(struct irdma_context* ic,
 }
 
 // ****************************
-// register irdma_ops and rxe_opcodes
+// register irdma_ops, wr_opcodes, and rxe_opcodes
 register_opcode_status irdma_init_opcodes(void) {
   register_opcode_status st;
+  enum ib_qp_type qpts[] = {IB_QPT_RC, IB_QPT_UC, IB_QPT_UD, IB_QPT_SMI, IB_QPT_GSI};
+    // (currently we can get away with just passing in contiguous subsets of the above
+    // array as 'qpts' for all existing wr_opcodes)
+
 #define WITH_CHECK(expr) \
   st = expr; \
-  if(st) return st;
+  if(st) { \
+    pr_err("Error %d with command " #expr "\n", st); \
+    return st; \
+  }
 
+  // irdma_ops
   WITH_CHECK(register_irdma_op(IRDMA_ACK, "IRDMA_ACK",
         &handle_incoming_ack, &handle_duplicate_ack, true))
   WITH_CHECK(register_irdma_op(IRDMA_SEND, "IRDMA_SEND",
@@ -284,79 +292,14 @@ register_opcode_status irdma_init_opcodes(void) {
         &handle_incoming_read, &handle_duplicate_read, false))
   WITH_CHECK(register_irdma_op(IRDMA_ATOMIC, "IRDMA_ATOMIC",
         &handle_incoming_atomic, &handle_duplicate_atomic, false))
-  WITH_CHECK(register_opcode_series(
-      IB_OPCODE_RC_SEND_FIRST,
-      IB_OPCODE_RC_SEND_MIDDLE,
-      IB_OPCODE_RC_SEND_LAST,
-      IB_OPCODE_RC_SEND_ONLY,
-      "IB_OPCODE_RC_SEND",
-      /*.irdma_op_num    = */ IRDMA_SEND,
-      /*.qpt             = */ IB_QPT_RC,
-      /*.immdt           = */ BOTH,
-                              IB_OPCODE_RC_SEND_LAST_WITH_IMMEDIATE,
-                              IB_OPCODE_RC_SEND_ONLY_WITH_IMMEDIATE,
-      /*.invalidate      = */ BOTH,
-                              IB_OPCODE_RC_SEND_LAST_WITH_INVALIDATE,
-                              IB_OPCODE_RC_SEND_ONLY_WITH_INVALIDATE,
-      /*.requiresReceive = */ true,
-      /*.postComplete    = */ true,
-      /*.atomicack       = */ false,
-      /*.sched_priority  = */ false
-  ))
-  WITH_CHECK(register_opcode_series(
-      IB_OPCODE_RC_RDMA_WRITE_FIRST,
-      IB_OPCODE_RC_RDMA_WRITE_MIDDLE,
-      IB_OPCODE_RC_RDMA_WRITE_LAST,
-      IB_OPCODE_RC_RDMA_WRITE_ONLY,
-      "IB_OPCODE_RC_RDMA_WRITE",
-      /*.irdma_op_num    = */ IRDMA_WRITE,
-      /*.qpt             = */ IB_QPT_RC,
-      /*.immdt           = */ BOTH,
-                              IB_OPCODE_RC_RDMA_WRITE_LAST_WITH_IMMEDIATE,
-                              IB_OPCODE_RC_RDMA_WRITE_ONLY_WITH_IMMEDIATE,
-      /*.invalidate      = */ NO,
-                              0,  // ignored
-                              0,  // ignored
-      /*.requiresReceive = */ false,
-      /*.postComplete    = */ false,
-      /*.atomicack       = */ false,
-      /*.sched_priority  = */ false
-  ))
-  WITH_CHECK(register_single_opcode(
-      IB_OPCODE_RC_RDMA_READ_REQUEST,
-      "IB_OPCODE_RC_RDMA_READ_REQUEST",
-      /*.irdma_op_num    = */ IRDMA_READ,
-      /*.qpt             = */ IB_QPT_RC,
-      /*.immdt           = */ false,
-      /*.invalidate      = */ false,
-      /*.requiresReceive = */ false,
-      /*.postComplete    = */ false,
-      /*.atomicack       = */ false,
-      /*.sched_priority  = */ true
-  ))
-  WITH_CHECK(register_opcode_series(
-      IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST,
-      IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE,
-      IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST,
-      IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY,
-      "IB_OPCODE_RC_RDMA_READ_RESPONSE",
-      /*.irdma_op_num    = */ IRDMA_ACK,
-      /*.qpt             = */ IB_QPT_RC,
-      /*.immdt           = */ NO,
-                              0,  // ignored
-                              0,  // ignored
-      /*.invalidate      = */ NO,
-                              0,  // ignored
-                              0,  // ignored
-      /*.requiresReceive = */ false,
-      /*.postComplete    = */ false,
-      /*.atomicack       = */ false,
-      /*.sched_priority  = */ false
-  ))
+
+  // 'ack' rxe_opcodes (note have to do these before wr_opcodes, since
+  // register_wr_opcode requires an ack_opcode_num for the wr_opcode)
   WITH_CHECK(register_single_opcode(
       IB_OPCODE_RC_ACKNOWLEDGE,
       "IB_OPCODE_RC_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
+      /*.wr_opcode_num   = */ 0,  // ignored
       /*.qpt             = */ IB_QPT_RC,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -369,6 +312,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE,
       "IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
+      /*.wr_opcode_num   = */ 0,  // ignored
       /*.qpt             = */ IB_QPT_RC,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -377,10 +321,162 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.atomicack       = */ true,
       /*.sched_priority  = */ false
   ))
+  WITH_CHECK(register_opcode_series(
+      IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST,
+      IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE,
+      IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST,
+      IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY,
+      "IB_OPCODE_RC_RDMA_READ_RESPONSE",
+      /*.irdma_op_num    = */ IRDMA_ACK,
+      /*.wr_opcode_num   = */ 0,  // ignored
+      /*.qpt             = */ IB_QPT_RC,
+      /*.immdt           = */ NO,
+                              0,  // ignored
+                              0,  // ignored
+                              0,  // ignored
+      /*.invalidate      = */ NO,
+                              0,  // ignored
+                              0,  // ignored
+                              0,  // ignored
+      /*.requiresReceive = */ false,
+      /*.postComplete    = */ false,
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
+  ))
+
+  // wr_opcodes
+  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_WRITE, "IB_WR_RDMA_WRITE",
+        /* compatible qpts  */ qpts, 2,
+        /* type           = */ WR_WRITE_MASK,
+        /* wr_inline      = */ true,
+        /* wc_opcode      = */ IB_WC_RDMA_WRITE,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_WRITE_WITH_IMM, "IB_WR_RDMA_WRITE_WITH_IMM",
+        /* compatible qpts  */ qpts, 2,
+        /* type           = */ WR_WRITE_MASK,
+        /* wr_inline      = */ true,
+        /* wc_opcode      = */ IB_WC_RDMA_WRITE,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_SEND, "IB_WR_SEND",
+        /* compatible qpts  */ qpts, 5,
+        /* type           = */ WR_SEND_MASK,
+        /* wr_inline      = */ true,
+        /* wc_opcode      = */ IB_WC_SEND,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_SEND_WITH_IMM, "IB_WR_SEND_WITH_IMM",
+        /* compatible qpts  */ qpts, 5,
+        /* type           = */ WR_SEND_MASK,
+        /* wr_inline      = */ true,
+        /* wc_opcode      = */ IB_WC_SEND,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_READ, "IB_WR_RDMA_READ",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_READ_MASK,
+        /* wr_inline      = */ false,
+        /* wc_opcode      = */ IB_WC_RDMA_READ,
+        /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
+  WITH_CHECK(register_wr_opcode(IB_WR_ATOMIC_CMP_AND_SWP, "IB_WR_ATOMIC_CMP_AND_SWP",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_ATOMIC_MASK,
+        /* wr_inline      = */ false,
+        /* wc_opcode      = */ IB_WC_COMP_SWAP,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_ATOMIC_FETCH_AND_ADD, "IB_WR_ATOMIC_FETCH_AND_ADD",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_ATOMIC_MASK,
+        /* wr_inline      = */ false,
+        /* wc_opcode      = */ IB_WC_FETCH_ADD,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, 0, false, IB_WC_LSO, 0))  // not supported
+  WITH_CHECK(register_wr_opcode(IB_WR_SEND_WITH_INV, "IB_WR_SEND_WITH_INV",
+        /* compatible qpts  */ qpts, 3,
+        /* type           = */ WR_SEND_MASK,
+        /* wr_inline      = */ true,
+        /* wc_opcode      = */ IB_WC_SEND,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_READ_WITH_INV, "IB_WR_RDMA_READ_WITH_INV",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_READ_MASK,
+        /* wr_inline      = */ false,
+        /* wc_opcode      = */ IB_WC_RDMA_READ,
+        /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
+  WITH_CHECK(register_wr_opcode(IB_WR_LOCAL_INV, "IB_WR_LOCAL_INV",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_REG_MASK,
+        /* wr_inline      = */ false,
+        /* wc_opcode      = */ IB_WC_LOCAL_INV,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+  WITH_CHECK(register_wr_opcode(IB_WR_REG_MR, "IB_WR_REG_MR",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_REG_MASK,
+        /* wr_inline      = */ false,
+        /* wc_opcode      = */ IB_WC_REG_MR,
+        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+
+  // The remaining rxe_opcodes (note have to do these after wr_opcodes, because we have to
+  // reference them against existing wr_opcodes)
+  WITH_CHECK(register_opcode_series(
+      IB_OPCODE_RC_SEND_FIRST,
+      IB_OPCODE_RC_SEND_MIDDLE,
+      IB_OPCODE_RC_SEND_LAST,
+      IB_OPCODE_RC_SEND_ONLY,
+      "IB_OPCODE_RC_SEND",
+      /*.irdma_op_num    = */ IRDMA_SEND,
+      /*.wr_opcode_num   = */ IB_WR_SEND,
+      /*.qpt             = */ IB_QPT_RC,
+      /*.immdt           = */ BOTH,
+                              IB_OPCODE_RC_SEND_LAST_WITH_IMMEDIATE,
+                              IB_OPCODE_RC_SEND_ONLY_WITH_IMMEDIATE,
+                              IB_WR_SEND_WITH_IMM,
+      /*.invalidate      = */ BOTH,
+                              IB_OPCODE_RC_SEND_LAST_WITH_INVALIDATE,
+                              IB_OPCODE_RC_SEND_ONLY_WITH_INVALIDATE,
+                              IB_WR_SEND_WITH_INV,
+      /*.requiresReceive = */ true,
+      /*.postComplete    = */ true,
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
+  ))
+  WITH_CHECK(register_opcode_series(
+      IB_OPCODE_RC_RDMA_WRITE_FIRST,
+      IB_OPCODE_RC_RDMA_WRITE_MIDDLE,
+      IB_OPCODE_RC_RDMA_WRITE_LAST,
+      IB_OPCODE_RC_RDMA_WRITE_ONLY,
+      "IB_OPCODE_RC_RDMA_WRITE",
+      /*.irdma_op_num    = */ IRDMA_WRITE,
+      /*.wr_opcode_num   = */ IB_WR_RDMA_WRITE,
+      /*.qpt             = */ IB_QPT_RC,
+      /*.immdt           = */ BOTH,
+                              IB_OPCODE_RC_RDMA_WRITE_LAST_WITH_IMMEDIATE,
+                              IB_OPCODE_RC_RDMA_WRITE_ONLY_WITH_IMMEDIATE,
+                              IB_WR_RDMA_WRITE_WITH_IMM,
+      /*.invalidate      = */ NO,
+                              0,  // ignored
+                              0,  // ignored
+                              0,  // ignored
+      /*.requiresReceive = */ false,
+      /*.postComplete    = */ false,
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ false
+  ))
+  WITH_CHECK(register_single_opcode(
+      IB_OPCODE_RC_RDMA_READ_REQUEST,
+      "IB_OPCODE_RC_RDMA_READ_REQUEST",
+      /*.irdma_op_num    = */ IRDMA_READ,
+      /*.wr_opcode_num   = */ IB_WR_RDMA_READ,
+      /*.qpt             = */ IB_QPT_RC,
+      /*.immdt           = */ false,
+      /*.invalidate      = */ false,
+      /*.requiresReceive = */ false,
+      /*.postComplete    = */ false,
+      /*.atomicack       = */ false,
+      /*.sched_priority  = */ true
+  ))
   WITH_CHECK(register_single_opcode(
       IB_OPCODE_RC_COMPARE_SWAP,
       "IB_OPCODE_RC_COMPARE_SWAP",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
+      /*.wr_opcode_num   = */ IB_WR_ATOMIC_CMP_AND_SWP,
       /*.qpt             = */ IB_QPT_RC,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -393,6 +489,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RC_FETCH_ADD,
       "IB_OPCODE_RC_FETCH_ADD",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
+      /*.wr_opcode_num   = */ IB_WR_ATOMIC_FETCH_AND_ADD,
       /*.qpt             = */ IB_QPT_RC,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -410,11 +507,14 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_UC_SEND_ONLY,
       "IB_OPCODE_UC_SEND",
       /*.irdma_op_num    = */ IRDMA_SEND,
+      /*.wr_opcode_num   = */ IB_WR_SEND,
       /*.qpt             = */ IB_QPT_UC,
       /*.immdt           = */ BOTH,
                               IB_OPCODE_UC_SEND_LAST_WITH_IMMEDIATE,
                               IB_OPCODE_UC_SEND_ONLY_WITH_IMMEDIATE,
+                              IB_WR_SEND_WITH_IMM,
       /*.invalidate      = */ NO,
+                              0,  // ignored
                               0,  // ignored
                               0,  // ignored
       /*.requiresReceive = */ true,
@@ -429,11 +529,14 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_UC_RDMA_WRITE_ONLY,
       "IB_OPCODE_UC_RDMA_WRITE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
+      /*.wr_opcode_num   = */ IB_WR_RDMA_WRITE,
       /*.qpt             = */ IB_QPT_UC,
       /*.immdt           = */ BOTH,
                               IB_OPCODE_UC_RDMA_WRITE_LAST_WITH_IMMEDIATE,
                               IB_OPCODE_UC_RDMA_WRITE_ONLY_WITH_IMMEDIATE,
+                              IB_WR_RDMA_WRITE_WITH_IMM,
       /*.invalidate      = */ NO,
+                              0,  // ignored
                               0,  // ignored
                               0,  // ignored
       /*.requiresReceive = */ false,
@@ -447,6 +550,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_UD_SEND_ONLY,
       "IB_OPCODE_UD_SEND_ONLY",
       /*.irdma_op_num    = */ IRDMA_SEND,
+      /*.wr_opcode_num   = */ IB_WR_SEND,
       /*.qpt             = */ IB_QPT_UD,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -459,6 +563,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE,
       "IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE",
       /*.irdma_op_num    = */ IRDMA_SEND,
+      /*.wr_opcode_num   = */ IB_WR_SEND,
       /*.qpt             = */ IB_QPT_UD,
       /*.immdt           = */ true,
       /*.invalidate      = */ false,
@@ -482,11 +587,14 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_SEND_ONLY,
       "IB_OPCODE_RD_SEND",
       /*.irdma_op_num    = */ IRDMA_SEND,
+      /*.wr_opcode_num   = */ IB_WR_SEND,
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ BOTH,
                               IB_OPCODE_RD_SEND_LAST_WITH_IMMEDIATE,
                               IB_OPCODE_RD_SEND_ONLY_WITH_IMMEDIATE,
+                              IB_WR_SEND_WITH_IMM,
       /*.invalidate      = */ NO,
+                              0,  // ignored
                               0,  // ignored
                               0,  // ignored
       /*.requiresReceive = */ true,
@@ -501,11 +609,14 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_RDMA_WRITE_ONLY,
       "IB_OPCODE_RD_RDMA_WRITE",
       /*.irdma_op_num    = */ IRDMA_WRITE,
+      /*.wr_opcode_num   = */ IB_WR_RDMA_WRITE,
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ BOTH,
                               IB_OPCODE_RD_RDMA_WRITE_LAST_WITH_IMMEDIATE,
                               IB_OPCODE_RD_RDMA_WRITE_ONLY_WITH_IMMEDIATE,
+                              IB_WR_RDMA_WRITE_WITH_IMM,
       /*.invalidate      = */ NO,
+                              0,  // ignored
                               0,  // ignored
                               0,  // ignored
       /*.requiresReceive = */ false,
@@ -517,6 +628,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_RDMA_READ_REQUEST,
       "IB_OPCODE_RD_RDMA_READ_REQUEST",
       /*.irdma_op_num    = */ IRDMA_READ,
+      /*.wr_opcode_num   = */ IB_WR_RDMA_READ,
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -532,11 +644,14 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_RDMA_READ_RESPONSE_ONLY,
       "IB_OPCODE_RD_RDMA_READ_RESPONSE",
       /*.irdma_op_num    = */ IRDMA_ACK,
+      /*.wr_opcode_num   = */ 0,  // ignored
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ NO,
                               0,  // ignored
                               0,  // ignored
+                              0,  // ignored
       /*.invalidate      = */ NO,
+                              0,  // ignored
                               0,  // ignored
                               0,  // ignored
       /*.requiresReceive = */ false,
@@ -548,6 +663,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_ACKNOWLEDGE,
       "IB_OPCODE_RD_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
+      /*.wr_opcode_num   = */ 0,  // ignored
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -560,6 +676,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_ATOMIC_ACKNOWLEDGE,
       "IB_OPCODE_RD_ATOMIC_ACKNOWLEDGE",
       /*.irdma_op_num    = */ IRDMA_ACK,
+      /*.wr_opcode_num   = */ 0,  // ignored
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -572,6 +689,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_COMPARE_SWAP,
       "IB_OPCODE_RD_COMPARE_SWAP",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
+      /*.wr_opcode_num   = */ 0,  // ignored
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,
@@ -584,6 +702,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_FETCH_ADD,
       "IB_OPCODE_RD_FETCH_ADD",
       /*.irdma_op_num    = */ IRDMA_ATOMIC,
+      /*.wr_opcode_num   = */ 0,  // ignored
       /*.qpt             = */ IB_QPT_RD,
       /*.immdt           = */ false,
       /*.invalidate      = */ false,

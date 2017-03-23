@@ -115,27 +115,6 @@ static inline unsigned long rnrnak_jiffies(u8 timeout)
 		usecs_to_jiffies(rnrnak_usec[timeout]), 1);
 }
 
-static enum ib_wc_opcode wr_to_wc_opcode(enum ib_wr_opcode opcode)
-{
-	switch (opcode) {
-	case IB_WR_RDMA_WRITE:			return IB_WC_RDMA_WRITE;
-	case IB_WR_RDMA_WRITE_WITH_IMM:		return IB_WC_RDMA_WRITE;
-	case IB_WR_SEND:			return IB_WC_SEND;
-	case IB_WR_SEND_WITH_IMM:		return IB_WC_SEND;
-	case IB_WR_RDMA_READ:			return IB_WC_RDMA_READ;
-	case IB_WR_ATOMIC_CMP_AND_SWP:		return IB_WC_COMP_SWAP;
-	case IB_WR_ATOMIC_FETCH_AND_ADD:	return IB_WC_FETCH_ADD;
-	case IB_WR_LSO:				return IB_WC_LSO;
-	case IB_WR_SEND_WITH_INV:		return IB_WC_SEND;
-	case IB_WR_RDMA_READ_WITH_INV:		return IB_WC_RDMA_READ;
-	case IB_WR_LOCAL_INV:			return IB_WC_LOCAL_INV;
-	case IB_WR_REG_MR:			return IB_WC_REG_MR;
-
-	default:
-		return 0xff;
-	}
-}
-
 void retransmit_timer(unsigned long data)
 {
 	struct rxe_qp *qp = (struct rxe_qp *)data;
@@ -203,7 +182,7 @@ static inline enum comp_state check_psn(struct rxe_qp *qp,
 	diff = psn_compare(pkt->psn, wqe->last_psn);
 	if (diff > 0) {
 		if (wqe->state == wqe_state_pending) {
-			if (wqe->mask & WR_ATOMIC_OR_READ_MASK)
+			if (wqe->mask & WR_ATOMIC_MASK || wqe->mask & WR_READ_MASK)
 				return COMPST_ERROR_RETRY;
 
 			reset_retry_counters(qp);
@@ -223,7 +202,7 @@ static inline enum comp_state check_psn(struct rxe_qp *qp,
 			return COMPST_COMP_ACK;
 		else
 			return COMPST_DONE;
-	} else if ((diff > 0) && (wqe->mask & WR_ATOMIC_OR_READ_MASK)) {
+	} else if ((diff > 0) && (wqe->mask & WR_ATOMIC_MASK || wqe->mask & WR_READ_MASK)) {
 		return COMPST_DONE;
 	} else {
 		return COMPST_CHECK_ACK;
@@ -387,7 +366,7 @@ static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 
 		wc->wr_id		= wqe->wr.wr_id;
 		wc->status		= wqe->status;
-		wc->opcode		= wr_to_wc_opcode(wqe->wr.opcode);
+		wc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].wc_opcode;
 		if (wqe->wr.opcode == IB_WR_RDMA_WRITE_WITH_IMM ||
 		    wqe->wr.opcode == IB_WR_SEND_WITH_IMM)
 			wc->wc_flags = IB_WC_WITH_IMM;
@@ -398,7 +377,7 @@ static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 
 		uwc->wr_id		= wqe->wr.wr_id;
 		uwc->status		= wqe->status;
-		uwc->opcode		= wr_to_wc_opcode(wqe->wr.opcode);
+		uwc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].wc_opcode;
 		if (wqe->wr.opcode == IB_WR_RDMA_WRITE_WITH_IMM ||
 		    wqe->wr.opcode == IB_WR_SEND_WITH_IMM)
 			uwc->wc_flags = IB_WC_WITH_IMM;
