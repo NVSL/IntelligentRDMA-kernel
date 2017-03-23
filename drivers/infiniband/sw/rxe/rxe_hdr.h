@@ -34,6 +34,8 @@
 #ifndef RXE_HDR_H
 #define RXE_HDR_H
 
+#include "irdma.h"
+
 /* extracted information about a packet carried in an sk_buff struct fits in
  * the skbuff cb array. Must be at most 48 bytes. stored in control block of
  * sk_buff for received packets.
@@ -50,7 +52,7 @@ struct rxe_pkt_info {
 	u8			port_num;	/* port pkt received on */
 	u8			opcode;		/* bth opcode of packet */
 	u8			offset;		/* bth offset from pkt->hdr */
-    u8          irdma_op_num;  /* see notes in irdma.h */
+    IRDMA_OPNUM irdma_opnum;  /* see notes in irdma.h */
 };
 
 /* Macros should be used only for received skb */

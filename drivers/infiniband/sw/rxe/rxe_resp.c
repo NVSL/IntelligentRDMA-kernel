@@ -144,7 +144,7 @@ static inline enum resp_states get_req(struct rxe_qp *qp,
 	if(qp->resp.res) {
 		struct rxe_pkt_info* pkt = *pkt_p;
 		struct irdma_context ic = { qp };
-		handle_incoming_status hs = irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt);
+		handle_incoming_status hs = rxe_opcode[pkt->opcode].handle_incoming(&ic, pkt);
         switch(hs) {
           case ERROR_LENGTH: return RESPST_ERR_LENGTH;
           case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
@@ -265,11 +265,11 @@ static enum resp_states check_op_valid(struct rxe_qp *qp,
 {
 	switch (qp_type(qp)) {
 	case IB_QPT_RC:
-		if (((pkt->irdma_op_num == IRDMA_READ) &&
+		if (((pkt->irdma_opnum == IRDMA_READ) &&
 		     !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_READ)) ||
-		    ((pkt->irdma_op_num == IRDMA_WRITE) &&
+		    ((pkt->irdma_opnum == IRDMA_WRITE) &&
 		     !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_WRITE)) ||
-		    ((pkt->irdma_op_num = IRDMA_ATOMIC) &&
+		    ((pkt->irdma_opnum = IRDMA_ATOMIC) &&
 		     !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_ATOMIC))) {
 			return RESPST_ERR_UNSUPPORTED_OPCODE;
 		}
@@ -277,7 +277,7 @@ static enum resp_states check_op_valid(struct rxe_qp *qp,
 		break;
 
 	case IB_QPT_UC:
-		if ((pkt->irdma_op_num == IRDMA_WRITE) &&
+		if ((pkt->irdma_opnum == IRDMA_WRITE) &&
 		    !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_WRITE)) {
 			qp->resp.drop_msg = 1;
 			return RESPST_CLEANUP;
@@ -362,7 +362,7 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 		}
 	}
 
-	if (pkt->irdma_op_num == IRDMA_READ || pkt->irdma_op_num == IRDMA_ATOMIC) {
+	if (pkt->irdma_opnum == IRDMA_READ || pkt->irdma_opnum == IRDMA_ATOMIC) {
 		/* it is the requesters job to not send
 		 * too many read/atomic ops, we just
 		 * recycle the responder resource queue
@@ -411,15 +411,15 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 	enum resp_states state;
 	int access;
 
-	if (pkt->irdma_op_num == IRDMA_READ || pkt->irdma_op_num == IRDMA_WRITE) {
+	if (pkt->irdma_opnum == IRDMA_READ || pkt->irdma_opnum == IRDMA_WRITE) {
 		if (pkt->mask & RXE_RETH_MASK) {
 			qp->resp.va = reth_va(pkt);
 			qp->resp.rkey = reth_rkey(pkt);
 			qp->resp.resid = reth_len(pkt);
 		}
-		access = (pkt->irdma_op_num == IRDMA_READ) ? IB_ACCESS_REMOTE_READ
+		access = (pkt->irdma_opnum == IRDMA_READ) ? IB_ACCESS_REMOTE_READ
 						     : IB_ACCESS_REMOTE_WRITE;
-	} else if (pkt->irdma_op_num == IRDMA_ATOMIC) {
+	} else if (pkt->irdma_opnum == IRDMA_ATOMIC) {
 		qp->resp.va = atmeth_va(pkt);
 		qp->resp.rkey = atmeth_rkey(pkt);
 		qp->resp.resid = sizeof(u64);
@@ -429,9 +429,9 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 	}
 
 	/* A zero-byte op is not required to set an addr or rkey. */
-	if ((  pkt->irdma_op_num == IRDMA_READ ||
-           pkt->irdma_op_num == IRDMA_WRITE ||
-           pkt->irdma_op_num == IRDMA_SEND    ) &&
+	if ((  pkt->irdma_opnum == IRDMA_READ ||
+           pkt->irdma_opnum == IRDMA_WRITE ||
+           pkt->irdma_opnum == IRDMA_SEND    ) &&
 	    (pkt->mask & RXE_RETH_MASK) &&
 	    reth_len(pkt) == 0) {
 		return RESPST_EXECUTE;
@@ -458,7 +458,7 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 		goto err2;
 	}
 
-	if (pkt->irdma_op_num == IRDMA_WRITE)	 {
+	if (pkt->irdma_opnum == IRDMA_WRITE)	 {
 		if (resid > mtu) {
 			if (pktlen != mtu || bth_pad(pkt)) {
 				state = RESPST_ERR_LENGTH;
@@ -498,7 +498,7 @@ err1:
 static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 {
 	struct irdma_context ic = { qp };
-	handle_incoming_status hs = irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt);
+	handle_incoming_status hs = rxe_opcode[pkt->opcode].handle_incoming(&ic, pkt);
     switch(hs) {
       case ERROR_LENGTH: return RESPST_ERR_LENGTH;
       case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
@@ -546,7 +546,7 @@ static enum resp_states do_complete(struct rxe_qp *qp,
 	/* fields after status are not required for errors */
 	if (wc->status == IB_WC_SUCCESS) {
 		wc->opcode = (pkt->mask & RXE_IMMDT_MASK &&
-				pkt->irdma_op_num == IRDMA_WRITE) ?
+				pkt->irdma_opnum == IRDMA_WRITE) ?
 					IB_WC_RECV_RDMA_WITH_IMM : IB_WC_RECV;
 		wc->vendor_err = 0;
 		wc->byte_len = wqe->dma.length - wqe->dma.resid;
@@ -644,7 +644,7 @@ static enum resp_states acknowledge(struct rxe_qp *qp,
 
 	if (qp->resp.aeth_syndrome != AETH_ACK_UNLIMITED)
 		send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, qp->resp.aeth_syndrome, pkt->psn);
-	else if (pkt->irdma_op_num == IRDMA_ATOMIC)
+	else if (pkt->irdma_opnum == IRDMA_ATOMIC)
 		send_packet(&ic, IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
 	else if (bth_ack(pkt))
 		send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
@@ -676,11 +676,11 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
 {
 	struct irdma_context ic = { qp };
 
-    switch(irdma_op[pkt->irdma_op_num].handle_duplicate(&ic, pkt)) {
+    switch(rxe_opcode[pkt->opcode].handle_duplicate(&ic, pkt)) {
       case HANDLED:
         return RESPST_CLEANUP;
       case REPROCESS:
-        switch(irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt)) {
+        switch(rxe_opcode[pkt->opcode].handle_incoming(&ic, pkt)) {
           case ERROR_LENGTH: return RESPST_ERR_LENGTH;
           case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
           case ERROR_RNR: return RESPST_ERR_RNR;

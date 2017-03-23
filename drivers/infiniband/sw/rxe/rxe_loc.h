@@ -35,6 +35,7 @@
 #define RXE_LOC_H
 
 #include "irdma.h"
+#include "rxe_verbs.h"
 
 /* rxe_av.c */
 
@@ -248,7 +249,7 @@ static inline int rxe_xmit_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 				  struct rxe_pkt_info *pkt, struct sk_buff *skb)
 {
 	int err;
-	int is_request = !(irdma_op[pkt->irdma_op_num].ack);
+	int is_request = !(rxe_opcode[pkt->opcode].ack);
 
 	if ((is_request && (qp->req.state != QP_STATE_READY)) ||
 	    (!is_request && (qp->resp.state != QP_STATE_READY))) {

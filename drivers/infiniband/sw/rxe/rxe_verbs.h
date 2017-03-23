@@ -36,8 +36,10 @@
 
 #include <linux/interrupt.h>
 #include <rdma/rdma_user_rxe.h>
+#include <rdma/ib_user_verbs.h>
 #include "rxe_pool.h"
 #include "rxe_task.h"
+#include "rxe_param.h"
 
 static inline int pkey_match(u16 key1, u16 key2)
 {

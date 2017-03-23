@@ -40,7 +40,7 @@ int send_packet(
   int pad;
   bool atomicack = rxe_opcode[opcode_num].mask & RXE_ATMACK_MASK;
 
-  if(unlikely(!(irdma_op[rxe_opcode[opcode_num].irdma_op_num].ack))) {
+  if(unlikely(!(rxe_opcode[opcode_num].ack))) {
       pr_err("Tried to send_packet but specifying a non-ack opcode\n");
       return -EINVAL;
   }
@@ -53,7 +53,7 @@ int send_packet(
   new_pkt.qp = ic->qp;
   new_pkt.opcode = opcode_num;
   new_pkt.mask = rxe_opcode[opcode_num].mask;
-  new_pkt.irdma_op_num = rxe_opcode[opcode_num].irdma_op_num;
+  new_pkt.irdma_opnum = rxe_opcode[opcode_num].irdma_opnum;
   new_pkt.offset = cur_pkt->offset;  // can I change this to rxe_opcode[opcode_num].offset?
   new_pkt.paylen = paylen;
 

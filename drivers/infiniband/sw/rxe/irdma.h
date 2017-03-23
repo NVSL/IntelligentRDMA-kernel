@@ -1,11 +1,11 @@
 #ifndef IRDMA_H
 #define IRDMA_H
 
-#include "rxe.h"
+#include <rdma/ib_pack.h>  // BIT()
 
 void irdma_init(void);
 
-// handle_incoming_status is the return type of the handle_incoming function for an irdma_op.
+// handle_incoming_status is the return type of the handle_incoming function for an opcode.
 typedef enum {
   OK = 0,  // indicates no error
   ERROR_LENGTH,  // indicates that copy_data returned -ENOSPC
@@ -18,69 +18,126 @@ typedef enum {
          // DONE indicates that you've already done all this yourself.
 } handle_incoming_status;
 
-// handle_duplicate_status is the return type of the handle_duplicate function for an irdma_op.
+// handle_duplicate_status is the return type of the handle_duplicate function for an opcode.
 typedef enum {
   HANDLED,    // duplicate packet has been handled, we're done
   REPROCESS,  // please now reprocess the duplicate packet (with handle_incoming) and proceed from
               //   there based on the return code from handle_incoming, as normal
 } handle_duplicate_status;
 
-// an irdma_context (along with info about the received packet) is passed to the handle_incoming
-//   function for an irdma_op
+// an irdma_context (along with info about the received packet) is passed to each handle function
 struct irdma_context {
   struct rxe_qp* qp;
 };
 
-// irdma_op arises out of the observation that all the existing entries in
+// These IRDMA_OPNUMS arise out of the observation that all the existing entries in
 // rxe_opcode have, in their 'mask' field, exactly one of the following 5 bits set:
 // RXE_ACK_MASK, RXE_SEND_MASK, RXE_WRITE_MASK, RXE_READ_MASK, RXE_ATOMIC_MASK
-// We separate this distinction out into an 'irdma_op' separate from the mask,
-// and allow its extensibility
+// We separate this distinction out into an IRDMA_OPNUM.
 // We also observe that RXE_REQ_MASK is set iff RXE_ACK_MASK is not,
 // and we generalize references to RXE_REQ_MASK to mean (not ack)
-// 'ack'==TRUE indicates 'ack'-type irdma_ops (ones that would have RXE_ACK_MASK set)
-#define IRDMA_MAX_OPS 256
-struct irdma_op {
-  char name[64];
-  handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*);
-  handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*);
-  bool ack;
-};
-extern struct irdma_op irdma_op[IRDMA_MAX_OPS];
-// cheating for now, allow other code to test against IRDMA_* opnums.
+// In rxe_opcode_info, 'ack'==TRUE indicates opcodes that would have RXE_ACK_MASK set
+// Having these defined here is cheating for now, to allow other code to test
+//   against IRDMA_* opnums.
 // The reason I don't like this is that this prohibits new opnums from emulating
-// the same functionality as (wherever the test is happening).
+//   the same functionality as (wherever the test is happening).
+// Ideally these should be defined only in irdma_opcode.c.
 #ifndef IRDMA_OPNUMS
 #define IRDMA_OPNUMS
-#define IRDMA_ACK 0
-#define IRDMA_SEND 1
-#define IRDMA_WRITE 2
-#define IRDMA_READ 3
-#define IRDMA_ATOMIC 4
+typedef enum {
+  IRDMA_ACK = 0,
+  IRDMA_SEND,
+  IRDMA_WRITE,
+  IRDMA_READ,
+  IRDMA_ATOMIC,
+} IRDMA_OPNUM;
 #endif
 
-typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
+enum rxe_wr_mask {
+	WR_INLINE_MASK			= BIT(0),
+	WR_ATOMIC_MASK			= BIT(1),
+	WR_SEND_MASK			= BIT(2),
+	WR_READ_MASK			= BIT(3),
+	WR_WRITE_MASK			= BIT(4),
+	//WR_LOCAL_MASK			= BIT(5),  // never used in existing code
+	WR_REG_MASK			= BIT(6),
+};
 
-// irdma_op_num : the desired irdma_op_num (not already in use)
-// name : a name for this irdma_op (max 63 characters, cannot be "")
-// handle_incoming : a function to be called to handle incoming packets of this type
-//   (see also irdma_funcs.h)
-// handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
-//   (see also irdma_funcs.h)
-// ack : if TRUE, packets of this type will be treated as 'ack' packets
-//   Among other things, 'ack' packets cannot be requested through a wr, so they
-//   do not need, and cannot have, an associated wr_opcode
-// returns :
-//   OPCODE_OK on success
-//   OPCODE_INVALID if irdma_op_num is outside allowed range or if 'name' is too long
-//   OPCODE_IN_USE if the desired irdma_op_num is already in use
-register_opcode_status register_irdma_op(
-    unsigned irdma_op_num,
-    char* name,
-    handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
-    handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
-    bool ack
-);
+#define WR_MAX_QPT		(8)
+
+struct rxe_wr_opcode_info {
+	char			    *name;
+	enum rxe_wr_mask	mask[WR_MAX_QPT];
+    enum ib_wc_opcode   wc_opcode;
+    unsigned            ack_opcode_num;
+};
+
+enum rxe_hdr_type {
+	RXE_LRH,
+	RXE_GRH,
+	RXE_BTH,
+	RXE_RETH,
+	RXE_AETH,
+	RXE_ATMETH,
+	RXE_ATMACK,
+	RXE_IETH,
+	RXE_RDETH,
+	RXE_DETH,
+	RXE_IMMDT,
+	RXE_PAYLOAD,
+	NUM_HDR_TYPES
+};
+
+enum rxe_hdr_mask {
+	RXE_LRH_MASK		= BIT(RXE_LRH),
+	RXE_GRH_MASK		= BIT(RXE_GRH),
+	RXE_BTH_MASK		= BIT(RXE_BTH),
+	RXE_IMMDT_MASK		= BIT(RXE_IMMDT),
+	RXE_RETH_MASK		= BIT(RXE_RETH),
+	RXE_AETH_MASK		= BIT(RXE_AETH),
+	RXE_ATMETH_MASK		= BIT(RXE_ATMETH),
+	RXE_ATMACK_MASK		= BIT(RXE_ATMACK),
+	RXE_IETH_MASK		= BIT(RXE_IETH),
+	RXE_RDETH_MASK		= BIT(RXE_RDETH),
+	RXE_DETH_MASK		= BIT(RXE_DETH),
+
+    RXE_RWR_MASK		= BIT(NUM_HDR_TYPES + 0),
+	RXE_COMP_MASK		= BIT(NUM_HDR_TYPES + 1),
+
+	RXE_START_MASK		= BIT(NUM_HDR_TYPES + 2),
+	RXE_MIDDLE_MASK		= BIT(NUM_HDR_TYPES + 3),
+	RXE_END_MASK		= BIT(NUM_HDR_TYPES + 4),
+
+	RXE_LOOPBACK_MASK	= BIT(NUM_HDR_TYPES + 5),
+
+    IRDMA_SCHED_PRIORITY_MASK = BIT(NUM_HDR_TYPES + 6),
+};
+
+#define OPCODE_NONE		(-1)
+
+struct rxe_pkt_info;  // forward declaration; declared in rxe_hdr.h
+
+struct rxe_opcode_info {
+	char			  name[64];
+	enum rxe_hdr_mask mask;
+    IRDMA_OPNUM       irdma_opnum;
+    handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*);
+    handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*);
+    bool              ack;
+    unsigned          wr_opcode_num;
+    enum ib_qp_type   qpt;
+	int			      length;
+    unsigned          series_id;
+	int			      offset[NUM_HDR_TYPES];
+};
+
+// store information about registered opcodes in these arrays
+#define IRDMA_MAX_WR_OPCODES 32
+extern struct rxe_wr_opcode_info rxe_wr_opcode_info[IRDMA_MAX_WR_OPCODES];
+#define IRDMA_MAX_RXE_OPCODES 256
+extern struct rxe_opcode_info rxe_opcode[IRDMA_MAX_RXE_OPCODES];
+
+typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
 
 // wr_opcode_num : the desired wr_opcode_num (not already in use)
 // name : a name for the wr_opcode (max 63 characters, cannot be "")
@@ -95,8 +152,7 @@ register_opcode_status register_irdma_op(
 //   (previously registered either with register_single_opcode or register_opcode_series)
 //   if we expect an opcode series rather than a single opcode, supply the *start* opcode
 //     of the series as ack_opcode_num here.
-//   In any case the ack_opcode_num must have been registered with an irdma_op_num which 
-//     was registered with ack==TRUE (marking it as an 'ack' opcode).
+//   In any case the ack_opcode_num must have been registered with ack==TRUE.
 //   Also note that this opcode is what is expected on *successful* ack; NAKs are handled
 //     separately, and the ack_opcode_num does not affect the NAK process.
 // returns:
@@ -119,12 +175,21 @@ register_opcode_status register_wr_opcode(
 
 // opcode_num : the desired opcode number (not already in use)
 // name : a name for the opcode (max 63 characters, cannot be "")
-// irdma_op_num : the number of the irdma_op for this opcode
-//   (previously registered with register_irdma_op)
+// irdma_opnum : which of the IRDMA_OPNUMS this opcode belongs to.
+//   Having this here is only a temporary measure, since it is (very) unextensible.
+//   Hopefully, in the near future all functionality can be captured with the other
+//   arguments, and nowhere in the code will test against specific irdma_opnums.
+// handle_incoming : a function to be called to handle incoming packets of this type
+//   (see also irdma_funcs.h)
+// handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
+//   (see also irdma_funcs.h)
+// ack : if TRUE, packets of this type will be treated as 'ack' packets
+//   Among other things, 'ack' packets cannot be requested through a wr, so they
+//   do not need, and cannot have, an associated wr_opcode
 // wr_opcode_num : the number of the wr_opcode_num for this opcode
 //   (previously registered with register_wr_opcode)
-//   wr_opcode_num is not required (in fact, ignored) if you specify an irdma_op_num which
-//   was registered with ack==TRUE.  (Ack opcodes can never be 'requested' through wr's.)
+//   wr_opcode_num is not required (in fact, ignored) if you specify ack==TRUE.
+//     (Ack opcodes can never be 'requested' through wr's.)
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // immdt : whether the packet includes an immediate value to be presented to the receiver
 //   'immdt' and 'invalidate' cannot both be TRUE.
@@ -136,8 +201,8 @@ register_opcode_status register_wr_opcode(
 // postComplete : whether a 'cqe' should be posted to the completion queue upon operation completion
 //   If immdt==TRUE, postComplete must be TRUE.
 //   TODO: also if invalidate==TRUE?
-// atomicack : set to TRUE iff the packet is an ack/response to an IRDMA_ATOMIC operation
-//   (in this case irdma_op_num should have been registered with ack==TRUE)
+// atomicack : set to TRUE iff the packet is an ack/response to an atomic operation
+//   (in this case 'ack' must be TRUE)
 // sched_priority : to my current understanding, setting this to TRUE instructs the
 //   internal scheduler to always handle an incoming packet of this type immediately,
 //   pushing aside other tasks (e.g. posting sends, completes, etc).
@@ -146,15 +211,17 @@ register_opcode_status register_wr_opcode(
 //   OPCODE_OK on success
 //   OPCODE_INVALID if:
 //     - opcode_num is outside allowed range
-//     - irdma_op_num or wr_opcode_num have not been registered
+//     - wr_opcode_num has not been registered
 //     - the 'name' string is too long
 //     - the combination of arguments passed is invalid
 //   OPCODE_IN_USE if the desired opcode_num is already in use
 register_opcode_status register_single_opcode(
     unsigned opcode_num,
     char* name,
-    unsigned irdma_op_num,
-    unsigned wr_opcode_num,
+    IRDMA_OPNUM irdma_opnum,
+    handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
+    handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
+    bool ack, unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     bool immdt, bool invalidate, bool requiresReceive, bool postComplete,
     bool atomicack, bool sched_priority
@@ -176,7 +243,10 @@ enum ynb { YES, NO, BOTH };
 //     This means the basename must be max 56 characters, if immdt==NO and invalidate==NO;
 //     max 47 characters, if immdt==NO and invalidate==YES/BOTH;
 //     or max 45 characters, if immdt==YES/BOTH
-//   irdma_op_num: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   irdma_opnum: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   handle_incoming: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   handle_duplicate: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   ack: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   wr_opcode_num: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   qpt: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   immdt: whether the series includes an immediate value to be presented to the receiver.
@@ -218,8 +288,8 @@ enum ynb { YES, NO, BOTH };
 //     TODO: Unclear if we should handle invalidate==YES or invalidate==BOTH similarly?
 //       No examples of postComplete==FALSE + invalidate==YES/BOTH in the existing opcodes
 //       Provisionally, I'm treating invalidate==YES/BOTH like immdt==YES/BOTH for postComplete
-//   atomicack : set to TRUE iff the series is an ack/response to an IRDMA_ATOMIC operation
-//     (in this case irdma_op_num should have been registered with ack==TRUE)
+//   atomicack : set to TRUE iff the series is an ack/response to an atomic operation
+//     (in this case ack must also be TRUE)
 //   sched_priority : to my current understanding, setting this to TRUE instructs the
 //     internal scheduler to always handle incoming packets from this series immediately,
 //     pushing aside other tasks (e.g. posting sends, completes, etc).
@@ -238,7 +308,7 @@ enum ynb { YES, NO, BOTH };
 //   OPCODE_OK on success
 //   OPCODE_INVALID if:
 //     - any of the opcode_nums (the ones that are not ignored per the rules above) are outside allowed range
-//     - irdma_op_num or any of the (not-ignored) wr_opcode_nums have not been registered
+//     - any of the (not-ignored) wr_opcode_nums have not been registered
 //     - the 'basename' string is too long
 //     - the combination of arguments passed is invalid
 //     In this case there is no guarantee given as to which of the series opcodes may or may not have
@@ -253,8 +323,10 @@ register_opcode_status register_opcode_series(
     unsigned end_opcode_num,
     unsigned only_opcode_num,
     char* basename,
-    unsigned irdma_op_num,
-    unsigned wr_opcode_num,
+    IRDMA_OPNUM irdma_opnum,
+    handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
+    handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
+    bool ack, unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
     enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,

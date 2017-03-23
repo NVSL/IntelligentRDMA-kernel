@@ -34,6 +34,8 @@
 #ifndef RXE_PARAM_H
 #define RXE_PARAM_H
 
+#include "rxe_hdr.h"
+
 static inline enum ib_mtu rxe_mtu_int_to_enum(int mtu)
 {
 	if (mtu < 256)

@@ -1,5 +1,10 @@
 #include "irdma.h"
 
+// forward declarations of structs etc we use
+struct rxe_pkt_info;
+struct rxe_dev;
+struct rxe_mem;
+
 // Functions available to user-defined handle_funcs, to be used in the course of handling an incoming packet.
 
 struct irdma_mem {
