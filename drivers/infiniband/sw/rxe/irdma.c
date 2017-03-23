@@ -243,6 +243,10 @@ register_opcode_status register_opcode_series(
   strcpy(middlename, basename);
   strcpy(endname, basename);
   strcpy(onlyname, basename);
+  strcat(startname, "_start");
+  strcat(middlename, "_middle");
+  strcat(endname, "_end");
+  strcat(onlyname, "_only");
   if(immdt==YES) {
     strcat(endname, "_with_immdt");  // throughout, one tiny way we're altering the functionality of the
     strcat(onlyname, "_with_immdt"); // existing code is that these constructed names will be slightly
@@ -250,8 +254,8 @@ register_opcode_status register_opcode_series(
   } else if(immdt==BOTH) {
     strcpy(endname_immdt, basename);
     strcpy(onlyname_immdt, basename);
-    strcat(endname_immdt, "_with_immdt");
-    strcat(onlyname_immdt, "_with_immdt");
+    strcat(endname_immdt, "_end_with_immdt");
+    strcat(onlyname_immdt, "_only_with_immdt");
   }
   if(invalidate==YES) {
     strcat(endname, "_with_inv");
@@ -259,8 +263,8 @@ register_opcode_status register_opcode_series(
   } else if(invalidate==BOTH) {
     strcpy(endname_inv, basename);
     strcpy(onlyname_inv, basename);
-    strcat(endname_inv, "_with_inv");
-    strcat(onlyname_inv, "_with_inv");
+    strcat(endname_inv, "_end_with_inv");
+    strcat(onlyname_inv, "_only_with_inv");
   }
   compound(&ret, __register_opcode(
       start_opcode_num, startname, irdma_opnum,
