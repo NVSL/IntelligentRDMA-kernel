@@ -36,3 +36,6 @@ int send_packet_raw(
     struct rxe_dev* rxe,
     bool atomicack
 );
+
+// Process a class A or C error (both are treated the same in this implementation)
+void do_class_ac_error(struct irdma_context* ic, u8 syndrome, enum ib_wc_status status);

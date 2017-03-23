@@ -8,6 +8,7 @@ struct resp_res* get_new_resource(struct irdma_context* ic) {
   return res;
 }
 
+// returns NULL if not found
 struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn) {
   int i;
   for(i = 0; i < ic->qp->attr.max_rd_atomic; i++) {
@@ -127,4 +128,13 @@ int send_packet_raw(
     kfree_skb(atomicack ? skb_copy : skb);
   }
   return err;
+}
+
+void do_class_ac_error(struct irdma_context* ic, u8 syndrome,
+			      enum ib_wc_status status) {
+	ic->qp->resp.aeth_syndrome = syndrome;
+	ic->qp->resp.status = status;
+
+	/* indicate that we should go through the ERROR state */
+	ic->qp->resp.goto_error	= 1;
 }

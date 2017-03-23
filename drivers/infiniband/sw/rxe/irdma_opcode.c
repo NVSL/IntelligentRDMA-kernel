@@ -40,9 +40,16 @@ static handle_incoming_status send_data_in(struct irdma_context *ic, void *data_
 
 	err = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE, &ic->qp->resp.wqe->dma,
 			data_addr, data_len, to_mem_obj, NULL);
-	if (unlikely(err))
-		return (err == -ENOSPC) ? ERROR_LENGTH
-					: ERROR_MALFORMED_WQE;
+	if (unlikely(err)) {
+      if(err == -ENOSPC) {
+        return ERROR_LENGTH;
+      } else {
+        // All queue types, Class A error.
+        do_class_ac_error(ic, AETH_NAK_REM_OP_ERR,
+            IB_WC_LOC_QP_OP_ERR);
+        return ERROR;
+      }
+    }
 
 	return OK;
 }
@@ -191,7 +198,10 @@ static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, s
 
 	/* check vaddr is 8 bytes aligned. */
 	if (!vaddr || (uintptr_t)vaddr & 7) {
-		return ERROR_MISALIGNED_ATOMIC;
+        // RC only, Class C error
+        do_class_ac_error(ic, AETH_NAK_INVALID_REQ,
+            IB_WC_REM_INV_REQ_ERR);
+		return ERROR;
 	}
 
 	spin_lock_bh(&atomic_ops_lock);

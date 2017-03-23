@@ -9,10 +9,9 @@ void irdma_init(void);
 typedef enum {
   OK = 0,  // indicates no error
   ERROR_LENGTH,  // indicates that copy_data returned -ENOSPC
-  ERROR_MALFORMED_WQE,  // indicates that copy_data returned any nonzero code other than -ENOSPC
   ERROR_RKEY_VIOLATION,  // explanation TBD, but name seems straightforward
   ERROR_RNR,  // 'receiver not ready' - indicates that a required receive request was not posted
-  ERROR_MISALIGNED_ATOMIC,  // indicates that the target address for an atomic operation wasn't 8-bytes aligned
+  ERROR,  // indicates that there was an error, but it has already been handled
   DONE,  // indicates we are completely done handling the packet, with no error.
          // Note that OK should usually be used instead - with OK, a bunch of bookkeeping is done to
          // complete the processing of this packet and prepare for the next.

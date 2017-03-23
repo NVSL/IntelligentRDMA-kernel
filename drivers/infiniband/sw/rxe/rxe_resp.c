@@ -56,9 +56,7 @@ enum resp_states {
 	RESPST_ACKNOWLEDGE,
 	RESPST_CLEANUP,
 	RESPST_DUPLICATE_REQUEST,
-	RESPST_ERR_MALFORMED_WQE,
 	RESPST_ERR_UNSUPPORTED_OPCODE,
-	RESPST_ERR_MISALIGNED_ATOMIC,
 	RESPST_ERR_PSN_OUT_OF_SEQ,
 	RESPST_ERR_MISSING_OPCODE_FIRST,
 	RESPST_ERR_MISSING_OPCODE_LAST_C,
@@ -88,9 +86,7 @@ static char *resp_state_name[] = {
 	[RESPST_ACKNOWLEDGE]			= "ACKNOWLEDGE",
 	[RESPST_CLEANUP]			= "CLEANUP",
 	[RESPST_DUPLICATE_REQUEST]		= "DUPLICATE_REQUEST",
-	[RESPST_ERR_MALFORMED_WQE]		= "ERR_MALFORMED_WQE",
 	[RESPST_ERR_UNSUPPORTED_OPCODE]		= "ERR_UNSUPPORTED_OPCODE",
-	[RESPST_ERR_MISALIGNED_ATOMIC]		= "ERR_MISALIGNED_ATOMIC",
 	[RESPST_ERR_PSN_OUT_OF_SEQ]		= "ERR_PSN_OUT_OF_SEQ",
 	[RESPST_ERR_MISSING_OPCODE_FIRST]	= "ERR_MISSING_OPCODE_FIRST",
 	[RESPST_ERR_MISSING_OPCODE_LAST_C]	= "ERR_MISSING_OPCODE_LAST_C",
@@ -149,18 +145,19 @@ static inline enum resp_states get_req(struct rxe_qp *qp,
 		struct rxe_pkt_info* pkt = *pkt_p;
 		struct irdma_context ic = { qp };
 		handle_incoming_status hs = irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt);
-    switch(hs) {
-      case ERROR_LENGTH: return RESPST_ERR_LENGTH;
-      case ERROR_MALFORMED_WQE: return RESPST_ERR_MALFORMED_WQE;
-      case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
-      case ERROR_RNR: return RESPST_ERR_RNR;
-      case ERROR_MISALIGNED_ATOMIC: return RESPST_ERR_MISALIGNED_ATOMIC;
-      case DONE: return RESPST_DONE;
-      case OK: break;
-      default: /* Unreachable */ WARN_ON(1);
-    }
-		WARN_ON(1);  // Shouldn't reach this, because pkt->irdma_op_num should be
-                     // IRDMA_READ, and that handler should never return OK
+        switch(hs) {
+          case ERROR_LENGTH: return RESPST_ERR_LENGTH;
+          case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
+          case ERROR_RNR: return RESPST_ERR_RNR;
+          case ERROR: return RESPST_COMPLETE;
+          case DONE: return RESPST_DONE;
+          case OK:
+            // In the existing code, this handle_incoming call is only ever
+            // handle_incoming_read, and that handler should never return OK
+            pr_warn("rxe_resp: Not sure what to do here\n");
+            break;
+          default: /* Unreachable */ WARN_ON(1);
+        }
 	}
 
 	return RESPST_CHK_PSN;
@@ -504,10 +501,9 @@ static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 	handle_incoming_status hs = irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt);
     switch(hs) {
       case ERROR_LENGTH: return RESPST_ERR_LENGTH;
-      case ERROR_MALFORMED_WQE: return RESPST_ERR_MALFORMED_WQE;
       case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
       case ERROR_RNR: return RESPST_ERR_RNR;
-      case ERROR_MISALIGNED_ATOMIC: return RESPST_ERR_MISALIGNED_ATOMIC;
+      case ERROR: return RESPST_COMPLETE;
       case DONE: return RESPST_DONE;
       case OK: break;
       default: /* Unreachable */ WARN_ON(1);
@@ -686,13 +682,13 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
       case REPROCESS:
         switch(irdma_op[pkt->irdma_op_num].handle_incoming(&ic, pkt)) {
           case ERROR_LENGTH: return RESPST_ERR_LENGTH;
-          case ERROR_MALFORMED_WQE: return RESPST_ERR_MALFORMED_WQE;
           case ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
           case ERROR_RNR: return RESPST_ERR_RNR;
-          case ERROR_MISALIGNED_ATOMIC: return RESPST_ERR_MISALIGNED_ATOMIC;
+          case ERROR: return RESPST_COMPLETE;
           case DONE: return RESPST_DONE;
           case OK:
             // This never happened in existing code, but I guess just clean up
+            pr_warn("rxe_resp: Not sure what to do here\n");
             return RESPST_CLEANUP;
           default: /* Unreachable */ WARN_ON(1); return RESPST_CLEANUP;
         }
@@ -700,17 +696,6 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
         pr_warn("Missed a case of handle_duplicate_status\n");
         return RESPST_CLEANUP;
     }
-}
-
-/* Process a class A or C. Both are treated the same in this implementation. */
-static void do_class_ac_error(struct rxe_qp *qp, u8 syndrome,
-			      enum ib_wc_status status)
-{
-	qp->resp.aeth_syndrome	= syndrome;
-	qp->resp.status		= status;
-
-	/* indicate that we should go through the ERROR state */
-	qp->resp.goto_error	= 1;
 }
 
 static enum resp_states do_class_d1e_error(struct rxe_qp *qp)
@@ -825,9 +810,8 @@ int rxe_responder(void *arg)
 		case RESPST_ERR_MISSING_OPCODE_FIRST:
 		case RESPST_ERR_MISSING_OPCODE_LAST_C:
 		case RESPST_ERR_UNSUPPORTED_OPCODE:
-		case RESPST_ERR_MISALIGNED_ATOMIC:
 			/* RC Only - Class C. */
-			do_class_ac_error(qp, AETH_NAK_INVALID_REQ,
+			do_class_ac_error(&ic, AETH_NAK_INVALID_REQ,
 					  IB_WC_REM_INV_REQ_ERR);
 			state = RESPST_COMPLETE;
 			break;
@@ -851,7 +835,7 @@ int rxe_responder(void *arg)
 		case RESPST_ERR_RKEY_VIOLATION:
 			if (qp_type(qp) == IB_QPT_RC) {
 				/* Class C */
-				do_class_ac_error(qp, AETH_NAK_REM_ACC_ERR,
+				do_class_ac_error(&ic, AETH_NAK_REM_ACC_ERR,
 						  IB_WC_REM_ACCESS_ERR);
 				state = RESPST_COMPLETE;
 			} else {
@@ -870,7 +854,7 @@ int rxe_responder(void *arg)
 		case RESPST_ERR_LENGTH:
 			if (qp_type(qp) == IB_QPT_RC) {
 				/* Class C */
-				do_class_ac_error(qp, AETH_NAK_INVALID_REQ,
+				do_class_ac_error(&ic, AETH_NAK_INVALID_REQ,
 						  IB_WC_REM_INV_REQ_ERR);
 				state = RESPST_COMPLETE;
 			} else if (qp->srq) {
@@ -882,13 +866,6 @@ int rxe_responder(void *arg)
 				qp->resp.drop_msg = 1;
 				state = RESPST_CLEANUP;
 			}
-			break;
-
-		case RESPST_ERR_MALFORMED_WQE:
-			/* All, Class A. */
-			do_class_ac_error(qp, AETH_NAK_REM_OP_ERR,
-					  IB_WC_LOC_QP_OP_ERR);
-			state = RESPST_COMPLETE;
 			break;
 
 		case RESPST_ERR_CQ_OVERFLOW:
