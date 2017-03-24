@@ -269,8 +269,36 @@ static handle_duplicate_status handle_duplicate_atomic(struct irdma_context* ic,
 
 // ****************************
 // handle_incoming funcs for 'ack' opcodes
-static handle_ack_status handle_incoming_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
-  // TODO
+static handle_ack_status handle_incoming_read_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
+  struct rxe_dev *rxe = to_rdev(ic->qp->ibqp.device);
+  int ret;
+
+  ret = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE,
+          &wqe->dma, payload_addr(pkt),
+          payload_size(pkt), to_mem_obj, NULL);
+  if (ret)
+    return ACK_ERROR;
+  else
+    return ACK_OK;
+}
+
+static handle_ack_status handle_incoming_atomic_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
+  struct rxe_dev *rxe = to_rdev(ic->qp->ibqp.device);
+  int ret;
+
+  u64 atomic_orig = atmack_orig(pkt);
+
+  ret = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE,
+          &wqe->dma, &atomic_orig,
+          sizeof(u64), to_mem_obj, NULL);
+  if (ret)
+    return ACK_ERROR;
+  else
+    return ACK_OK;
+}
+
+static handle_ack_status handle_incoming_sendorwrite_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
+  // nothing to do
   return ACK_OK;
 }
 
@@ -294,13 +322,13 @@ register_opcode_status irdma_init_opcodes(void) {
   WITH_CHECK(register_single_ack_opcode(
       IB_OPCODE_RC_ACKNOWLEDGE,
       "IB_OPCODE_RC_ACKNOWLEDGE",
-      /*.handle_incoming  = */ &handle_incoming_ack,
+      /*.handle_incoming  = */ &handle_incoming_sendorwrite_ack,
       /*.atomicack       = */ false
   ))
   WITH_CHECK(register_single_ack_opcode(
       IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE,
       "IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE",
-      /*.handle_incoming  = */ &handle_incoming_ack,
+      /*.handle_incoming  = */ &handle_incoming_atomic_ack,
       /*.atomicack       = */ true
   ))
   WITH_CHECK(register_ack_opcode_series(
@@ -309,7 +337,7 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST,
       IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY,
       "IB_OPCODE_RC_RDMA_READ_RESPONSE",
-      /*.handle_incoming  = */ &handle_incoming_ack,
+      /*.handle_incoming  = */ &handle_incoming_read_ack,
       /*.atomicack       = */ false
   ))
 
@@ -565,21 +593,21 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RD_RDMA_READ_RESPONSE_LAST,
       IB_OPCODE_RD_RDMA_READ_RESPONSE_ONLY,
       "IB_OPCODE_RD_RDMA_READ_RESPONSE",
-      /*.handle_incoming  = */ &handle_incoming_ack,
+      /*.handle_incoming  = */ &handle_incoming_read_ack,
       /*.qpt             = */ IB_QPT_RD,
       /*.atomicack       = */ false
   ))
   WITH_CHECK(register_single_ack_opcode(
       IB_OPCODE_RD_ACKNOWLEDGE,
       "IB_OPCODE_RD_ACKNOWLEDGE",
-      /*.handle_incoming  = */ &handle_incoming_ack,
+      /*.handle_incoming  = */ &handle_incoming_sendorwrite_ack,
       /*.qpt             = */ IB_QPT_RD,
       /*.atomicack       = */ false
   ))
   WITH_CHECK(register_single_ack_opcode(
       IB_OPCODE_RD_ATOMIC_ACKNOWLEDGE,
       "IB_OPCODE_RD_ATOMIC_ACKNOWLEDGE",
-      /*.handle_incoming  = */ &handle_incoming_ack,
+      /*.handle_incoming  = */ &handle_incoming_atomic_ack,
       /*.qpt             = */ IB_QPT_RD,
       /*.atomicack       = */ true
   ))

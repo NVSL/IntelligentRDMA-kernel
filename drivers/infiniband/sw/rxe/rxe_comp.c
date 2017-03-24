@@ -45,9 +45,6 @@ enum comp_state {
 	COMPST_COMP_ACK,
 	COMPST_CHECK_PSN,
 	COMPST_CHECK_ACK,
-	COMPST_READ,
-	COMPST_ATOMIC,
-	COMPST_WRITE_SEND,
 	COMPST_UPDATE_COMP,
 	COMPST_ERROR_RETRY,
 	COMPST_RNR_RETRY,
@@ -63,9 +60,6 @@ static char *comp_state_name[] =  {
 	[COMPST_COMP_ACK]		= "COMP ACK",
 	[COMPST_CHECK_PSN]		= "CHECK PSN",
 	[COMPST_CHECK_ACK]		= "CHECK ACK",
-	[COMPST_READ]			= "READ",
-	[COMPST_ATOMIC]			= "ATOMIC",
-	[COMPST_WRITE_SEND]		= "WRITE/SEND",
 	[COMPST_UPDATE_COMP]		= "UPDATE COMP",
 	[COMPST_ERROR_RETRY]		= "ERROR RETRY",
 	[COMPST_RNR_RETRY]		= "RNR RETRY",
@@ -215,6 +209,7 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
 {
 	unsigned int mask = pkt->mask;
 	u8 syn;
+    struct irdma_context ic = { qp };
 
 	/* Check the sequence only */
 	if(qp->comp.opcode == -1) {
@@ -231,129 +226,124 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     }
 
     /* Check operation validity. */
+    // High-level comment: can we possibly create a new opcode specifically for NAKs
+    // rather than just re-using IB_OPCODE_RC_ACKNOWLEDGE?
+    // Right now IB_OPCODE_RC_ACKNOWLEDGE plays two very different roles:
+    // (1) normal 'ack' for all write/send wr's (when syn & AETH_TYPE_MASK == AETH_ACK)
+    // (2) NAK for any wr whatsoever (when syn & AETH_TYPE_MASK != AETH_ACK)
+    // Since we want to handle NAKs internally, there's this weird dependence where we
+    // need to guarantee that the user will register IB_OPCODE_RC_ACKNOWLEDGE correctly
+    // If we split this, we could create a new opcode specifically for NAKs (which would
+    // exist automatically, the user wouldn't (and couldn't) register it); and then
+    // let the user register whatever normal 'ack's they wanted, under whatever opcodes
+    // they wanted
+    // We would just have a single reserved opcode number (probably 0?) for NAKs
 
-	switch (pkt->opcode) {
-	case IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST:
-	case IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST:
-	case IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY:
-		syn = aeth_syn(pkt);
+    if(pkt->mask & RXE_AETH_MASK) {
+      // all 'ack' opcodes except 'middle' opcodes have RXE_AETH_MASK
+      syn = aeth_syn(pkt);
+    }
+    // special: first check for NAKs and handle them internally
+    // before passing control to user-provided code
+    if(pkt->opcode == IB_OPCODE_RC_ACKNOWLEDGE) {
+      switch(syn & AETH_TYPE_MASK) {
+        case AETH_ACK:
+          // not a NAK, let user code handle
+          break;
+        case AETH_RNR_NAK: return COMPST_RNR_RETRY;
+        case AETH_NAK:
+          switch(syn) {
 
-		if ((syn & AETH_TYPE_MASK) != AETH_ACK)
-			return COMPST_ERROR;
+            case AETH_NAK_PSN_SEQ_ERROR:
+              // a nak implicitly acks all packets with psns before
+              if(psn_compare(pkt->psn, qp->comp.psn) > 0) {
+                qp->comp.psn = pkt->psn;
+                if(qp->req.wait_psn) {
+                  qp->req.wait_psn = 0;
+                  rxe_run_task(&qp->req.task, 1);
+                }
+              }
+              return COMPST_ERROR_RETRY;
 
-		/* Fall through (IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE
-		 * doesn't have an AETH)
-		 */
-	case IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE:
-		if (wqe->wr.opcode != IB_WR_RDMA_READ &&
-		    wqe->wr.opcode != IB_WR_RDMA_READ_WITH_INV) {
-			return COMPST_ERROR;
-		}
-		reset_retry_counters(qp);
-		return COMPST_READ;
-
-	case IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE:
-		syn = aeth_syn(pkt);
-
-		if ((syn & AETH_TYPE_MASK) != AETH_ACK)
-			return COMPST_ERROR;
-
-		if (wqe->wr.opcode != IB_WR_ATOMIC_CMP_AND_SWP &&
-		    wqe->wr.opcode != IB_WR_ATOMIC_FETCH_AND_ADD)
-			return COMPST_ERROR;
-		reset_retry_counters(qp);
-		return COMPST_ATOMIC;
-
-	case IB_OPCODE_RC_ACKNOWLEDGE:
-		syn = aeth_syn(pkt);
-		switch (syn & AETH_TYPE_MASK) {
-		case AETH_ACK:
-			reset_retry_counters(qp);
-			return COMPST_WRITE_SEND;
-
-		case AETH_RNR_NAK:
-			return COMPST_RNR_RETRY;
-
-		case AETH_NAK:
-			switch (syn) {
-			case AETH_NAK_PSN_SEQ_ERROR:
-				/* a nak implicitly acks all packets with psns
-				 * before
-				 */
-				if (psn_compare(pkt->psn, qp->comp.psn) > 0) {
-					qp->comp.psn = pkt->psn;
-					if (qp->req.wait_psn) {
-						qp->req.wait_psn = 0;
-						rxe_run_task(&qp->req.task, 1);
-					}
-				}
-				return COMPST_ERROR_RETRY;
-
-			case AETH_NAK_INVALID_REQ:
-				wqe->status = IB_WC_REM_INV_REQ_ERR;
-				return COMPST_ERROR;
+            case AETH_NAK_INVALID_REQ:
+              wqe->status = IB_WC_REM_INV_REQ_ERR;
+              return COMPST_ERROR;
 
 			case AETH_NAK_REM_ACC_ERR:
-				wqe->status = IB_WC_REM_ACCESS_ERR;
-				return COMPST_ERROR;
+              wqe->status = IB_WC_REM_ACCESS_ERR;
+              return COMPST_ERROR;
 
 			case AETH_NAK_REM_OP_ERR:
-				wqe->status = IB_WC_REM_OP_ERR;
-				return COMPST_ERROR;
+              wqe->status = IB_WC_REM_OP_ERR;
+              return COMPST_ERROR;
 
 			default:
-				pr_warn("unexpected nak %x\n", syn);
-				wqe->status = IB_WC_REM_OP_ERR;
-				return COMPST_ERROR;
-			}
-
+              pr_warn("unexpected nak %x\n", syn);
+              wqe->status = IB_WC_REM_OP_ERR;
+              return COMPST_ERROR;
+          }
 		default:
-			return COMPST_ERROR;
+          return COMPST_ERROR;
 		}
-		break;
+    }
+    // Any non-IB_OPCODE_RC_ACKNOWLEDGE with a NAK is an error
+    if( (pkt->mask & RXE_AETH_MASK) &&
+        ((syn & AETH_TYPE_MASK) != AETH_ACK)) {
+        return COMPST_ERROR;
+    }
+    // we have a successful (non-NAK) ack
+    reset_retry_counters(qp);
 
-	default:
-		pr_warn("unexpected opcode\n");
-	}
+    if(rxe_wr_opcode_info[wqe->wr.opcode].ack_opcode_num
+        != rxe_opcode[pkt->opcode].series_id) {
+      // not from the series we were expecting
+      return COMPST_ERROR;
+      // Note: existing code did not perform this check if
+      // pkt->opcode was IB_OPCODE_RC_ACKNOWLEDGE
+      // (it seems it just assumed wr.opcode was a suitable value)
+      // I'm assuming that was unintentional, or at least that
+      // adding the check doesn't break anything.  Hopefully I'm
+      // not wrong about this.
+    }
 
-	return COMPST_ERROR;
-}
+    // At this point we know we have syn & AETH_TYPE_MASK == AETH_ACK
+    // and some 'ack' opcode, possibly still IB_OPCODE_RC_ACKNOWLEDGE
+    // (we let that case drop through earlier).  We also know the 'ack'
+    // opcode correctly matches the wr_opcode which was originally posted.
+    // This is the setting in which we'll call a user-specified function
+    // to handle the 'ack'.
 
-static inline enum comp_state do_read(struct rxe_qp *qp,
-				      struct rxe_pkt_info *pkt,
-				      struct rxe_send_wqe *wqe)
-{
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-	int ret;
+    // TODO: we shouldn't expose the contents of aeth_syn(pkt) to users
+    // or let them set it directly when sending packets, since we're
+    // handling these details ourselves.  To let users send their own
+    // NAKs, we should probably just provide a function for them to call;
+    // and for users sending normal ACKs, we should set syn to AETH_ACK
+    // for them
 
-	ret = copy_data(rxe, qp->pd, IB_ACCESS_LOCAL_WRITE,
-			&wqe->dma, payload_addr(pkt),
-			payload_size(pkt), to_mem_obj, NULL);
-	if (ret)
-		return COMPST_ERROR;
+    switch(rxe_opcode[pkt->opcode].ack.handle_incoming(&ic, pkt, wqe)) {
+      case ACK_ERROR:
+        return COMPST_ERROR;
+      case ACK_OK:
+        // Curious why this case is different
+        // I wonder whether we could just use the 'else' branch for the
+        // IB_OPCODE_RC_ACKNOWLEDGE case as well, and if it would be equivalent
+        if(pkt->opcode == IB_OPCODE_RC_ACKNOWLEDGE) {
+          if(wqe->state == wqe_state_pending &&
+             wqe->last_psn == pkt->psn)
+            return COMPST_COMP_ACK;
+          else
+            return COMPST_UPDATE_COMP;
+        } else {
+          if (wqe->dma.resid == 0 && (pkt->mask & RXE_END_MASK))
+            return COMPST_COMP_ACK;
+          else
+            return COMPST_UPDATE_COMP;
+        }
+      default:
+        pr_warn("rxe_comp: missed a case of ack.handle_incoming\n");
+        return COMPST_ERROR;
 
-	if (wqe->dma.resid == 0 && (pkt->mask & RXE_END_MASK))
-		return COMPST_COMP_ACK;
-	else
-		return COMPST_UPDATE_COMP;
-}
-
-static inline enum comp_state do_atomic(struct rxe_qp *qp,
-					struct rxe_pkt_info *pkt,
-					struct rxe_send_wqe *wqe)
-{
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-	int ret;
-
-	u64 atomic_orig = atmack_orig(pkt);
-
-	ret = copy_data(rxe, qp->pd, IB_ACCESS_LOCAL_WRITE,
-			&wqe->dma, &atomic_orig,
-			sizeof(u64), to_mem_obj, NULL);
-	if (ret)
-		return COMPST_ERROR;
-	else
-		return COMPST_COMP_ACK;
+    }
 }
 
 static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
@@ -566,22 +556,6 @@ int rxe_completer(void *arg)
 
 		case COMPST_CHECK_ACK:
 			state = check_ack(qp, pkt, wqe);
-			break;
-
-		case COMPST_READ:
-			state = do_read(qp, pkt, wqe);
-			break;
-
-		case COMPST_ATOMIC:
-			state = do_atomic(qp, pkt, wqe);
-			break;
-
-		case COMPST_WRITE_SEND:
-			if (wqe->state == wqe_state_pending &&
-			    wqe->last_psn == pkt->psn)
-				state = COMPST_COMP_ACK;
-			else
-				state = COMPST_UPDATE_COMP;
 			break;
 
 		case COMPST_COMP_ACK:
