@@ -40,7 +40,7 @@ int send_packet(
   int pad;
   bool atomicack = rxe_opcode[opcode_num].mask & RXE_ATMACK_MASK;
 
-  if(unlikely(!(rxe_opcode[opcode_num].ack))) {
+  if(unlikely(!(rxe_opcode[opcode_num].is_ack))) {
       pr_err("Tried to send_packet but specifying a non-ack opcode\n");
       return -EINVAL;
   }
@@ -53,7 +53,9 @@ int send_packet(
   new_pkt.qp = ic->qp;
   new_pkt.opcode = opcode_num;
   new_pkt.mask = rxe_opcode[opcode_num].mask;
-  new_pkt.irdma_opnum = rxe_opcode[opcode_num].irdma_opnum;
+  //new_pkt.irdma_opnum = rxe_opcode[opcode_num].req.irdma_opnum;
+    // this is an 'ack' packet, so its req.irdma_opnum is invalid, and
+    // new_pkt's irdma_opnum shouldn't ever be touched either
   new_pkt.offset = cur_pkt->offset;  // can I change this to rxe_opcode[opcode_num].offset?
   new_pkt.paylen = paylen;
 
@@ -115,7 +117,7 @@ int send_packet_raw(
     }
     res = get_new_resource(ic);
     memcpy(SKB_TO_PKT(skb), pkt, sizeof(skb->cb));
-    res->type = IRDMA_ATOMIC;
+    res->type = IRDMA_REQ_ATOMIC;
     res->atomic.skb = skb;
     res->first_psn = pkt->psn;
     res->last_psn = pkt->psn;

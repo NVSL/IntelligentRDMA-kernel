@@ -403,7 +403,7 @@ static struct sk_buff *init_req_packet(struct rxe_qp *qp,
 	pkt->qp		= qp;
 	pkt->psn	= qp->req.psn;
 	pkt->mask	= rxe_opcode[opcode].mask;
-    pkt->irdma_opnum = rxe_opcode[opcode].irdma_opnum;
+    pkt->irdma_opnum = rxe_opcode[opcode].req.irdma_opnum;
 	pkt->paylen	= paylen;
 	pkt->offset	= 0;
 	pkt->wqe	= wqe;
@@ -417,8 +417,8 @@ static struct sk_buff *init_req_packet(struct rxe_qp *qp,
 	/* init bth */
 	solicited = (ibwr->send_flags & IB_SEND_SOLICITED) &&
 			(pkt->mask & RXE_END_MASK) &&
-			((pkt->irdma_opnum == IRDMA_SEND) ||
-			(pkt->irdma_opnum == IRDMA_WRITE && (pkt->mask & RXE_IMMDT_MASK)));
+			((pkt->irdma_opnum == IRDMA_REQ_SEND) ||
+			(pkt->irdma_opnum == IRDMA_REQ_WRITE && (pkt->mask & RXE_IMMDT_MASK)));
 
 	pkey = (qp_type(qp) == IB_QPT_GSI) ?
 		 port->pkey_tbl[ibwr->wr.ud.pkey_index] :
@@ -484,7 +484,7 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	if (err)
 		return err;
 
-	if (pkt->irdma_opnum == IRDMA_WRITE || pkt->irdma_opnum == IRDMA_SEND) {
+	if (pkt->irdma_opnum == IRDMA_REQ_WRITE || pkt->irdma_opnum == IRDMA_REQ_SEND) {
 		if (wqe->wr.send_flags & IB_SEND_INLINE) {
 			u8 *tmp = &wqe->dma.inline_data[wqe->dma.sge_offset];
 
@@ -539,7 +539,7 @@ static void update_wqe_psn(struct rxe_qp *qp,
 		wqe->last_psn = (qp->req.psn + num_pkt - 1) & BTH_PSN_MASK;
 	}
 
-	if (pkt->irdma_opnum == IRDMA_READ)
+	if (pkt->irdma_opnum == IRDMA_REQ_READ)
 		qp->req.psn = (wqe->first_psn + num_pkt) & BTH_PSN_MASK;
 	else
 		qp->req.psn = (qp->req.psn + 1) & BTH_PSN_MASK;
@@ -589,7 +589,7 @@ int rxe_requester(void *arg)
 	struct sk_buff *skb;
 	struct rxe_send_wqe *wqe;
 	enum rxe_hdr_mask mask;
-    IRDMA_OPNUM irdma_opnum;
+    IRDMA_REQ_OPNUM irdma_req_opnum;
 	int payload;
 	int mtu;
 	int opcode;
@@ -675,14 +675,14 @@ next_wqe:
 	}
 
 	mask = rxe_opcode[opcode].mask;
-    irdma_opnum = rxe_opcode[opcode].irdma_opnum;
-	if (unlikely(irdma_opnum == IRDMA_READ || irdma_opnum == IRDMA_ATOMIC)) {
+    irdma_req_opnum = rxe_opcode[opcode].req.irdma_opnum;
+	if (unlikely(irdma_req_opnum == IRDMA_REQ_READ || irdma_req_opnum == IRDMA_REQ_ATOMIC)) {
 		if (check_init_depth(qp, wqe))
 			goto exit;
 	}
 
 	mtu = get_mtu(qp, wqe);
-	payload = (irdma_opnum == IRDMA_WRITE || irdma_opnum == IRDMA_SEND) ? wqe->dma.resid : 0;
+	payload = (irdma_req_opnum == IRDMA_REQ_WRITE || irdma_req_opnum == IRDMA_REQ_SEND) ? wqe->dma.resid : 0;
 	if (payload > mtu) {
 		if (qp_type(qp) == IB_QPT_UD) {
 			/* C10-93.1.1: If the total sum of all the buffer lengths specified for a
