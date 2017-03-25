@@ -659,10 +659,13 @@ err1:
 static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 			 struct ib_send_wr *ibwr)
 {
+    unsigned wr_opcode = ibwr->opcode;
 	wr->wr_id = ibwr->wr_id;
 	wr->num_sge = ibwr->num_sge;
-	wr->opcode = ibwr->opcode;
+	wr->opcode = wr_opcode;
 	wr->send_flags = ibwr->send_flags;
+    if(rxe_wr_opcode_info[wr_opcode].mask & WR_IMMDT_MASK) wr->ex.imm_data = ibwr->ex.imm_data;
+    if(rxe_wr_opcode_info[wr_opcode].mask & WR_INV_MASK) wr->ex.invalidate_rkey = ibwr->ex.invalidate_rkey;
 
 	if (qp_type(qp) == IB_QPT_UD ||
 	    qp_type(qp) == IB_QPT_SMI ||
@@ -671,22 +674,17 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 		wr->wr.ud.remote_qkey = ud_wr(ibwr)->remote_qkey;
 		if (qp_type(qp) == IB_QPT_GSI)
 			wr->wr.ud.pkey_index = ud_wr(ibwr)->pkey_index;
-		if (wr->opcode == IB_WR_SEND_WITH_IMM)
-			wr->ex.imm_data = ibwr->ex.imm_data;
 	} else {
-		switch (wr->opcode) {
+		switch (wr_opcode) {
 		case IB_WR_RDMA_WRITE_WITH_IMM:
-			wr->ex.imm_data = ibwr->ex.imm_data;
 		case IB_WR_RDMA_READ:
 		case IB_WR_RDMA_WRITE:
 			wr->wr.rdma.remote_addr = rdma_wr(ibwr)->remote_addr;
 			wr->wr.rdma.rkey	= rdma_wr(ibwr)->rkey;
 			break;
 		case IB_WR_SEND_WITH_IMM:
-			wr->ex.imm_data = ibwr->ex.imm_data;
 			break;
 		case IB_WR_SEND_WITH_INV:
-			wr->ex.invalidate_rkey = ibwr->ex.invalidate_rkey;
 			break;
 		case IB_WR_ATOMIC_CMP_AND_SWP:
 		case IB_WR_ATOMIC_FETCH_AND_ADD:
@@ -698,13 +696,12 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 			wr->wr.atomic.rkey = atomic_wr(ibwr)->rkey;
 			break;
 		case IB_WR_LOCAL_INV:
-			wr->ex.invalidate_rkey = ibwr->ex.invalidate_rkey;
-		break;
+            break;
 		case IB_WR_REG_MR:
 			wr->wr.reg.mr = reg_wr(ibwr)->mr;
 			wr->wr.reg.key = reg_wr(ibwr)->key;
 			wr->wr.reg.access = reg_wr(ibwr)->access;
-		break;
+            break;
 		default:
 			break;
 		}

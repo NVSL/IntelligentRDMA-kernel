@@ -65,13 +65,14 @@ typedef enum {
 #endif
 
 enum rxe_wr_mask {
-	WR_INLINE_MASK			= BIT(0),
-	WR_ATOMIC_MASK			= BIT(1),
-	WR_SEND_MASK			= BIT(2),
-	WR_READ_MASK			= BIT(3),
-	WR_WRITE_MASK			= BIT(4),
-	//WR_LOCAL_MASK			= BIT(5),  // never used in existing code
-	WR_REG_MASK			= BIT(6),
+	WR_INLINE_MASK = BIT(0),
+	WR_ATOMIC_MASK = BIT(1),
+	WR_SEND_MASK = BIT(2),
+	WR_READ_MASK = BIT(3),
+	WR_WRITE_MASK = BIT(4),
+    WR_IMMDT_MASK = BIT(5),
+    WR_INV_MASK = BIT(6),
+	WR_REG_MASK = BIT(7),
 };
 
 #define WR_MAX_QPT		(8)
@@ -179,6 +180,10 @@ typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_st
 //   For more information see comments on register_req_opcode_series()
 // type : one of WR_SEND_MASK, WR_WRITE_MASK, WR_READ_MASK, WR_ATOMIC_MASK, or WR_REG_MASK
 //   Better explanation TBD
+// immdt : whether the operation should (in addition to whatever else it does) present an
+//   immediate value to the receiver
+// invalidate : whether the operation should (in addition to whatever else it does) 'invalidate'
+//   a remote memory region.  'immdt' and 'invalidate' cannot both be TRUE.
 // wr_inline : explanation TBD
 // wc_opcode : the wc_opcode associated with this wr_opcode
 //   that is, the opcode to place in the CQE for this wr
@@ -202,6 +207,8 @@ register_opcode_status register_wr_opcode(
     unsigned num_qpts,
     bool series,
     enum rxe_wr_mask type,
+    bool immdt,
+    bool invalidate,
     bool wr_inline,
     enum ib_wc_opcode wc_opcode,
     unsigned ack_opcode_num
@@ -226,10 +233,6 @@ register_opcode_status register_wr_opcode(
 //   Each wr_opcode can only have one req_opcode per qpt; you can't register multiple
 //     (single_)req_opcodes with the same wr_opcode and qpt
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
-// immdt : whether the packet includes an immediate value to be presented to the receiver
-//   'immdt' and 'invalidate' cannot both be TRUE.
-// invalidate : whether the packet should (in addition to whatever else it does) 'invalidate'
-//   a remote memory region.  'immdt' and 'invalidate' cannot both be TRUE.
 // requiresReceive : whether the operation requires that the receiver has posted a 'receive' WQE
 //   If immdt==TRUE, requiresReceive must be TRUE.
 //   TODO: also if invalidate==TRUE?
@@ -261,7 +264,7 @@ register_opcode_status register_single_req_opcode(
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
-    bool immdt, bool invalidate, bool requiresReceive, bool postComplete, bool sched_priority
+    bool requiresReceive, bool postComplete, bool sched_priority
 );
 
 enum ynb { YES, NO, BOTH };
@@ -291,12 +294,14 @@ enum ynb { YES, NO, BOTH };
 //   immdt: whether the series includes an immediate value to be presented to the receiver.
 //     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the immediate.
 //     If YES, the 'end' and 'only' opcodes carry an immediate.  If NO, they don't.
+//       In these two cases, wr_opcode_num must have been registered with immdt==TRUE/FALSE respectively.
 //     If BOTH, then two different versions of the 'end' and 'only' opcodes will be registered;
 //       versions without an immediate will be registered under end_opcode_num and only_opcode_num,
 //       whereas versions with an immediate will be registered under
 //       end_opcode_num_immdt and only_opcode_num_immdt.
 //       You also must supply a wr_opcode_num_immdt which will be used for the immediate-carrying
 //       version of the series (wr_opcode_num will be used for the non-immediate-carrying version).
+//       wr_opcode_num_immdt must have been registered with immdt==TRUE, and wr_opcode_num with immdt==FALSE.
 //     See also below, 'immdt--invalidate restriction'
 //   end_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
 //   only_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
@@ -305,12 +310,14 @@ enum ynb { YES, NO, BOTH };
 //     a remote memory region.
 //     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the invalidate.
 //     If YES, the 'end' and 'only' opcodes carry an invalidate.  If NO, they don't.
+//       In these two cases, wr_opcode_num must have been registered with invalidate==TRUE/FALSE respectively.
 //     If BOTH, then two different versions of the 'end' and 'only' opcodes will be registered;
 //       versions without an invalidate will be registered under end_opcode_num and only_opcode_num,
 //       whereas versions with an invalidate will be registered under
 //       end_opcode_num_inv and only_opcode_num_inv.
 //       You also must supply a wr_opcode_num_inv which will be used for the invalidate-carrying
 //       version of the series (wr_opcode_num will be used for the non-invalidate-carrying version).
+//       wr_opcode_num_inv must have been registered with inv==TRUE, and wr_opcode_num with inv==FALSE.
 //     See also below, 'immdt-invalidate restriction'
 //   end_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
 //   only_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored

@@ -346,6 +346,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 2,
         /* series         = */ true,
         /* type           = */ WR_WRITE_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
         /* wr_inline      = */ true,
         /* wc_opcode      = */ IB_WC_RDMA_WRITE,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
@@ -353,6 +355,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 2,
         /* series         = */ true,
         /* type           = */ WR_WRITE_MASK,
+        /* immdt          = */ true,
+        /* invalidate     = */ false,
         /* wr_inline      = */ true,
         /* wc_opcode      = */ IB_WC_RDMA_WRITE,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
@@ -360,6 +364,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 5,
         /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
         /* wr_inline      = */ true,
         /* wc_opcode      = */ IB_WC_SEND,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
@@ -367,6 +373,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 5,
         /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
+        /* immdt          = */ true,
+        /* invalidate     = */ false,
         /* wr_inline      = */ true,
         /* wc_opcode      = */ IB_WC_SEND,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
@@ -374,6 +382,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_READ_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
         /* wr_inline      = */ false,
         /* wc_opcode      = */ IB_WC_RDMA_READ,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
@@ -381,6 +391,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_ATOMIC_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
         /* wr_inline      = */ false,
         /* wc_opcode      = */ IB_WC_COMP_SWAP,
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
@@ -388,14 +400,18 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_ATOMIC_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
         /* wr_inline      = */ false,
         /* wc_opcode      = */ IB_WC_FETCH_ADD,
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, false, 0, false, IB_WC_LSO, 0))  // not supported
+  WITH_CHECK(register_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, false, 0, false, false, false, IB_WC_LSO, 0))  // not supported
   WITH_CHECK(register_wr_opcode(IB_WR_SEND_WITH_INV, "IB_WR_SEND_WITH_INV",
         /* compatible qpts  */ qpts, 3,
         /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ true,
         /* wr_inline      = */ true,
         /* wc_opcode      = */ IB_WC_SEND,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
@@ -403,6 +419,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_READ_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ true,
         /* wr_inline      = */ false,
         /* wc_opcode      = */ IB_WC_RDMA_READ,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
@@ -410,6 +428,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_REG_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ true,
         /* wr_inline      = */ false,
         /* wc_opcode      = */ IB_WC_LOCAL_INV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
@@ -417,6 +437,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_REG_MASK,
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
         /* wr_inline      = */ false,
         /* wc_opcode      = */ IB_WC_REG_MR,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
@@ -477,8 +499,6 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.handle_duplicate = */ &handle_duplicate_read,
       /*.wr_opcode_num   = */ IB_WR_RDMA_READ,
       /*.qpt             = */ IB_QPT_RC,
-      /*.immdt           = */ false,
-      /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
       /*.sched_priority  = */ true
@@ -491,8 +511,6 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.handle_duplicate = */ &handle_duplicate_atomic,
       /*.wr_opcode_num   = */ IB_WR_ATOMIC_CMP_AND_SWP,
       /*.qpt             = */ IB_QPT_RC,
-      /*.immdt           = */ false,
-      /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
       /*.sched_priority  = */ false
@@ -505,8 +523,6 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.handle_duplicate = */ &handle_duplicate_atomic,
       /*.wr_opcode_num   = */ IB_WR_ATOMIC_FETCH_AND_ADD,
       /*.qpt             = */ IB_QPT_RC,
-      /*.immdt           = */ false,
-      /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
       /*.sched_priority  = */ false
@@ -569,8 +585,6 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.handle_duplicate = */ &handle_duplicate_sendorwrite,
       /*.wr_opcode_num   = */ IB_WR_SEND,
       /*.qpt             = */ IB_QPT_UD,
-      /*.immdt           = */ false,
-      /*.invalidate      = */ false,
       /*.requiresReceive = */ true,
       /*.postComplete    = */ true,
       /*.sched_priority  = */ false
@@ -583,8 +597,6 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.handle_duplicate = */ &handle_duplicate_sendorwrite,
       /*.wr_opcode_num   = */ IB_WR_SEND_WITH_IMM,
       /*.qpt             = */ IB_QPT_UD,
-      /*.immdt           = */ true,
-      /*.invalidate      = */ false,
       /*.requiresReceive = */ true,
       /*.postComplete    = */ true,
       /*.sched_priority  = */ false

@@ -22,6 +22,8 @@ register_opcode_status register_wr_opcode(
     unsigned num_qpts,
     bool series,
     enum rxe_wr_mask type,
+    bool immdt,
+    bool invalidate,
     bool wr_inline,
     enum ib_wc_opcode wc_opcode,
     unsigned ack_opcode_num
@@ -41,6 +43,9 @@ register_opcode_status register_wr_opcode(
     // (The properties we require are that ack_opcode is either a single opcode,
     // or the 'start' opcode of a series; the above line will also pass
     // opcodes which are 'only' components of a series)
+  if(unlikely(immdt && invalidate)) return OPCODE_INVALID;
+    // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
+    // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
   strcpy(rxe_wr_opcode_info[wr_opcode_num].name, name);
   rxe_wr_opcode_info[wr_opcode_num].is_series = series;
   for(i = 0; i < WR_MAX_QPT; i++) {
@@ -48,7 +53,11 @@ register_opcode_status register_wr_opcode(
     if(series) rxe_wr_opcode_info[wr_opcode_num].opcodes[i].opcode_set.start_opcode_num = 0;
     else rxe_wr_opcode_info[wr_opcode_num].opcodes[i].opcode_num = 0;
   }
-  rxe_wr_opcode_info[wr_opcode_num].mask = (wr_inline ? WR_INLINE_MASK : 0) | type;
+  rxe_wr_opcode_info[wr_opcode_num].mask =
+      (wr_inline ? WR_INLINE_MASK : 0)
+    | (immdt ? WR_IMMDT_MASK : 0)
+    | (invalidate ? WR_INV_MASK : 0)
+    | type;
   for(i = 0; i < WR_MAX_QPT; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[i] = false;
   for(i = 0; i < num_qpts; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[qpts[i]] = true;
   rxe_wr_opcode_info[wr_opcode_num].wc_opcode = wc_opcode;
@@ -232,7 +241,7 @@ register_opcode_status register_single_req_opcode(
   handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
   unsigned wr_opcode_num,
   enum ib_qp_type qpt,
-  bool immdt, bool invalidate, bool requiresReceive, bool postComplete, bool sched_priority
+  bool requiresReceive, bool postComplete, bool sched_priority
 ) {
   register_opcode_status st;
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
@@ -255,7 +264,9 @@ register_opcode_status register_single_req_opcode(
       handle_duplicate,
       wr_opcode_num,
       qpt,
-      immdt, invalidate, requiresReceive, postComplete, sched_priority,
+      /* immdt      = */ rxe_wr_opcode_info[wr_opcode_num].mask & WR_IMMDT_MASK,
+      /* invalidate = */ rxe_wr_opcode_info[wr_opcode_num].mask & WR_INV_MASK,
+      requiresReceive, postComplete, sched_priority,
       /* start     = */ true,   /* \                           */
       /* middle    = */ false,  /*  |--  (treat as an 'only')  */
       /* end       = */ true,   /* /                           */
@@ -316,17 +327,23 @@ register_opcode_status register_req_opcode_series(
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].is_series)) return OPCODE_INVALID;
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].qpts[qpt])) return OPCODE_INVALID;
   if(unlikely(rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_set.start_opcode_num != 0)) return OPCODE_IN_USE;
+  if(unlikely((rxe_wr_opcode_info[wr_opcode_num].mask & WR_IMMDT_MASK) && immdt!=YES)) return OPCODE_INVALID;
+  if(unlikely((rxe_wr_opcode_info[wr_opcode_num].mask & WR_INV_MASK) && invalidate!=YES)) return OPCODE_INVALID;
+  if(unlikely((!(rxe_wr_opcode_info[wr_opcode_num].mask & WR_IMMDT_MASK)) && immdt==YES)) return OPCODE_INVALID;
+  if(unlikely((!(rxe_wr_opcode_info[wr_opcode_num].mask & WR_INV_MASK)) && invalidate==YES)) return OPCODE_INVALID;
   if(immdt==BOTH) {
     if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_immdt].name[0])) return OPCODE_INVALID;
     if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_immdt].is_series)) return OPCODE_INVALID;
     if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_immdt].qpts[qpt])) return OPCODE_INVALID;
     if(unlikely(rxe_wr_opcode_info[wr_opcode_num_immdt].opcodes[qpt].opcode_set.start_opcode_num != 0)) return OPCODE_IN_USE;
+    if(unlikely(!(rxe_wr_opcode_info[wr_opcode_num_immdt].mask & WR_IMMDT_MASK))) return OPCODE_INVALID;
   }
   if(invalidate==BOTH) {
     if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_inv].name[0])) return OPCODE_INVALID;
     if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_inv].is_series)) return OPCODE_INVALID;
     if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_inv].qpts[qpt])) return OPCODE_INVALID;
     if(unlikely(rxe_wr_opcode_info[wr_opcode_num_inv].opcodes[qpt].opcode_set.start_opcode_num != 0)) return OPCODE_IN_USE;
+    if(unlikely(!(rxe_wr_opcode_info[wr_opcode_num_inv].mask & WR_INV_MASK))) return OPCODE_INVALID;
   }
   strcpy(startname, basename);
   strcpy(middlename, basename);
