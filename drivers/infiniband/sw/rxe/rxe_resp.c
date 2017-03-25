@@ -392,31 +392,29 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 	u32 pktlen;
 	int mtu = qp->mtu;
 	enum resp_states state;
-	int access;
+	int access = rxe_opcode[pkt->opcode].req.perms;
+    if(!access) return RESPST_EXECUTE;
+      // If you have no required permissions then you don't get to perform
+      // any of the actions in the rest of this function
 
-	if (pkt->irdma_opnum == IRDMA_REQ_READ || pkt->irdma_opnum == IRDMA_REQ_WRITE) {
+	if (access & IRDMA_PERM_READ || access & IRDMA_PERM_WRITE) {
 		if (pkt->mask & RXE_RETH_MASK) {
 			qp->resp.va = reth_va(pkt);
 			qp->resp.rkey = reth_rkey(pkt);
 			qp->resp.resid = reth_len(pkt);
 		}
-		access = (pkt->irdma_opnum == IRDMA_REQ_READ) ? IB_ACCESS_REMOTE_READ
-						     : IB_ACCESS_REMOTE_WRITE;
-	} else if (pkt->irdma_opnum == IRDMA_REQ_ATOMIC) {
+	} else if (access & IRDMA_PERM_ATOMIC) {
+      // the 'else' in this seems to assume that we never have both
+      // ATOMIC and READ/WRITE.  This is true in existing code.
+      // In fact, I think that more than just this will break if this
+      // doesn't hold (see e.g. struct rxe_send_wr if I recall correctly)
 		qp->resp.va = atmeth_va(pkt);
 		qp->resp.rkey = atmeth_rkey(pkt);
 		qp->resp.resid = sizeof(u64);
-		access = IB_ACCESS_REMOTE_ATOMIC;
-	} else {
-		return RESPST_EXECUTE;
 	}
 
 	/* A zero-byte op is not required to set an addr or rkey. */
-	if ((  pkt->irdma_opnum == IRDMA_REQ_READ ||
-           pkt->irdma_opnum == IRDMA_REQ_WRITE ||
-           pkt->irdma_opnum == IRDMA_REQ_SEND    ) &&
-	    (pkt->mask & RXE_RETH_MASK) &&
-	    reth_len(pkt) == 0) {
+	if ( (pkt->mask & RXE_RETH_MASK) && reth_len(pkt) == 0 ) {
 		return RESPST_EXECUTE;
 	}
 
@@ -441,7 +439,7 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 		goto err2;
 	}
 
-	if (pkt->irdma_opnum == IRDMA_REQ_WRITE)	 {
+	if (access & IRDMA_PERM_WRITE)	 {
 		if (resid > mtu) {
 			if (pktlen != mtu || bth_pad(pkt)) {
 				state = RESPST_ERR_LENGTH;
