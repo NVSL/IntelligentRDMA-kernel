@@ -20,6 +20,7 @@ register_opcode_status register_wr_opcode(
     char* name,
     enum ib_qp_type* qpts,
     unsigned num_qpts,
+    bool series,
     enum rxe_wr_mask type,
     bool wr_inline,
     enum ib_wc_opcode wc_opcode,
@@ -31,6 +32,7 @@ register_opcode_status register_wr_opcode(
   if(strlen(name) > 63) return OPCODE_INVALID;
   if(!name[0]) return OPCODE_INVALID;
   if(rxe_wr_opcode_info[wr_opcode_num].name[0]) return OPCODE_IN_USE;  // name=="" indicates free
+    // TODO if someone tries to actually use a not-yet-registered wr_opcode, give a suitable error msg
   if(!ack_opcode_info.name[0]) return OPCODE_INVALID;
   if(!ack_opcode_info.is_ack) return OPCODE_INVALID;
   if(!(ack_opcode_info.mask & RXE_START_MASK)) return OPCODE_INVALID;
@@ -40,10 +42,15 @@ register_opcode_status register_wr_opcode(
     // or the 'start' opcode of a series; the above line will also pass
     // opcodes which are 'only' components of a series)
   strcpy(rxe_wr_opcode_info[wr_opcode_num].name, name);
-  for(i = 0; i < num_qpts; i++) {
-    rxe_wr_opcode_info[wr_opcode_num].mask[qpts[i]] =
-      (wr_inline ? WR_INLINE_MASK : 0) | type;
+  rxe_wr_opcode_info[wr_opcode_num].is_series = series;
+  for(i = 0; i < WR_MAX_QPT; i++) {
+    // mark opcode num or set not-yet-registered for each qpt
+    if(series) rxe_wr_opcode_info[wr_opcode_num].opcodes[i].opcode_set.start_opcode_num = 0;
+    else rxe_wr_opcode_info[wr_opcode_num].opcodes[i].opcode_num = 0;
   }
+  rxe_wr_opcode_info[wr_opcode_num].mask = (wr_inline ? WR_INLINE_MASK : 0) | type;
+  for(i = 0; i < WR_MAX_QPT; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[i] = false;
+  for(i = 0; i < num_qpts; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[qpts[i]] = true;
   rxe_wr_opcode_info[wr_opcode_num].wc_opcode = wc_opcode;
   rxe_wr_opcode_info[wr_opcode_num].ack_opcode_num = ack_opcode_num;
   return OPCODE_OK;
@@ -110,9 +117,10 @@ static register_opcode_status __register_req_opcode(
 ) {
   enum rxe_hdr_mask mask;
   if(unlikely(opcode_num >= IRDMA_MAX_RXE_OPCODES)) return OPCODE_INVALID;
+  if(unlikely(opcode_num == 0)) return OPCODE_INVALID;
   if(unlikely(!name[0])) return OPCODE_INVALID;
   if(unlikely(rxe_opcode[opcode_num].name[0])) return OPCODE_IN_USE;  // name=="" indicates free
-  if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
+    // TODO if someone tries to actually use a not-yet-registered req_opcode, give a suitable error msg
   if(unlikely(immdt && invalidate)) return OPCODE_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
@@ -187,8 +195,10 @@ static register_opcode_status __register_ack_opcode(
 ) {
   enum rxe_hdr_mask mask;
   if(unlikely(opcode_num >= IRDMA_MAX_RXE_OPCODES)) return OPCODE_INVALID;
+  if(unlikely(opcode_num == 0)) return OPCODE_INVALID;
   if(unlikely(!name[0])) return OPCODE_INVALID;
   if(unlikely(rxe_opcode[opcode_num].name[0])) return OPCODE_IN_USE;  // name=="" indicates free
+    // TODO if someone tries to actually use a not-yet-registered ack_opcode, give a suitable error msg
   if(unlikely(strlen(name) > 63)) return OPCODE_INVALID;
   mask =
     // see comments on __register_req_opcode for fuller explanation of mask bits
@@ -210,6 +220,10 @@ static register_opcode_status __register_ack_opcode(
   return OPCODE_OK;
 }
 
+static void __deregister_opcode(unsigned opcode_num) {
+  rxe_opcode[opcode_num].name[0] = '\0';
+}
+
 register_opcode_status register_single_req_opcode(
   unsigned opcode_num,
   char* name,
@@ -220,7 +234,18 @@ register_opcode_status register_single_req_opcode(
   enum ib_qp_type qpt,
   bool immdt, bool invalidate, bool requiresReceive, bool postComplete, bool sched_priority
 ) {
-  return __register_req_opcode(
+  register_opcode_status st;
+  if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
+  if(unlikely(rxe_wr_opcode_info[wr_opcode_num].is_series)) return OPCODE_INVALID;
+  if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].qpts[qpt])) return OPCODE_INVALID;
+    // More elegant would be, don't make the user declare supported qpts when registering wr_opcode,
+    //   and instead just assume that qpts with registered opcodes are supported, and without are not
+    //   However, the existing code marks some wr_opcodes as compatible with IB_QPT_SMI and IB_QPT_GSI,
+    //   and others not; and doesn't register opcodes for SMI or GSI.  So we kind of have to keep this,
+    //   just to preserve that information?  I wish I understood more about SMI / GSI and why they
+    //   don't have opcodes (in rxe_opcode.c in the existing code).
+  if(unlikely(rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_num != 0)) return OPCODE_IN_USE;
+  st = __register_req_opcode(
       opcode_num,
       name,
       irdma_req_opnum,
@@ -234,6 +259,11 @@ register_opcode_status register_single_req_opcode(
       /* end       = */ true,   /* /                           */
       /* series_id = */ opcode_num
       );
+  if(st == OPCODE_OK) {
+    // don't register with the wr_opcode if the rxe_opcode registration failed
+    rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_num = opcode_num;
+  }
+  return st;
 }
 
 register_opcode_status register_single_ack_opcode(
@@ -252,15 +282,6 @@ register_opcode_status register_single_ack_opcode(
       /* end       = */ true,   /* /                           */
       /* series_id = */ opcode_num
       );
-}
-
-// Set a to the 'min', where the order is OPCODE_INVALID < OPCODE_IN_USE < OPCODE_OK
-static void compound(register_opcode_status* a, register_opcode_status b) {
-  if(*a==OPCODE_INVALID) return;
-  if(b==OPCODE_OK) return;
-  if(*a==OPCODE_OK) {*a = b; return;}
-  if(b==OPCODE_INVALID) {*a = b; return;}
-  return;  // both are OPCODE_IN_USE
 }
 
 register_opcode_status register_req_opcode_series(
@@ -289,6 +310,22 @@ register_opcode_status register_req_opcode_series(
   if(unlikely(invalidate==YES && immdt!=NO)) return OPCODE_INVALID;
   if(unlikely(immdt==YES && !postComplete)) return OPCODE_INVALID;
   if(unlikely(invalidate==YES && !postComplete)) return OPCODE_INVALID;
+  if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
+  if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].is_series)) return OPCODE_INVALID;
+  if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].qpts[qpt])) return OPCODE_INVALID;
+  if(unlikely(rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_set.start_opcode_num != 0)) return OPCODE_IN_USE;
+  if(immdt==BOTH) {
+    if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_immdt].name[0])) return OPCODE_INVALID;
+    if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_immdt].is_series)) return OPCODE_INVALID;
+    if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_immdt].qpts[qpt])) return OPCODE_INVALID;
+    if(unlikely(rxe_wr_opcode_info[wr_opcode_num_immdt].opcodes[qpt].opcode_set.start_opcode_num != 0)) return OPCODE_IN_USE;
+  }
+  if(invalidate==BOTH) {
+    if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_inv].name[0])) return OPCODE_INVALID;
+    if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_inv].is_series)) return OPCODE_INVALID;
+    if(unlikely(!rxe_wr_opcode_info[wr_opcode_num_inv].qpts[qpt])) return OPCODE_INVALID;
+    if(unlikely(rxe_wr_opcode_info[wr_opcode_num_inv].opcodes[qpt].opcode_set.start_opcode_num != 0)) return OPCODE_IN_USE;
+  }
   strcpy(startname, basename);
   strcpy(middlename, basename);
   strcpy(endname, basename);
@@ -316,7 +353,7 @@ register_opcode_status register_req_opcode_series(
     strcat(endname_inv, "_end_with_inv");
     strcat(onlyname_inv, "_only_with_inv");
   }
-  compound(&ret, __register_req_opcode(
+  ret = __register_req_opcode(
       start_opcode_num, startname, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ false,
@@ -328,9 +365,9 @@ register_opcode_status register_req_opcode_series(
       /* middle          = */ false,
       /* end             = */ false,
       /* series_id       = */ start_opcode_num
-      ));
-  if(ret==OPCODE_INVALID) return ret;
-  compound(&ret, __register_req_opcode(
+      );
+  if(ret) goto err0;
+  ret = __register_req_opcode(
       middle_opcode_num, middlename, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ false,
@@ -342,9 +379,9 @@ register_opcode_status register_req_opcode_series(
       /* middle          = */ true,
       /* end             = */ false,
       /* series_id       = */ start_opcode_num
-      ));
-  if(ret==OPCODE_INVALID) return ret;
-  compound(&ret, __register_req_opcode(
+      );
+  if(ret) goto err1;
+  ret = __register_req_opcode(
       end_opcode_num, endname, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
@@ -356,9 +393,9 @@ register_opcode_status register_req_opcode_series(
       /* middle          = */ false,
       /* end             = */ true,
       /* series_id       = */ start_opcode_num
-      ));
-  if(ret==OPCODE_INVALID) return ret;
-  compound(&ret, __register_req_opcode(
+      );
+  if(ret) goto err2;
+  ret = __register_req_opcode(
       only_opcode_num, onlyname, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
@@ -370,10 +407,10 @@ register_opcode_status register_req_opcode_series(
       /* middle          = */ false,
       /* end             = */ true,
       /* series_id       = */ start_opcode_num
-      ));
-  if(ret==OPCODE_INVALID) return ret;
+      );
+  if(ret) goto err3;
   if(immdt==BOTH) {
-    compound(&ret, __register_req_opcode(
+    ret = __register_req_opcode(
         end_opcode_num_immdt, endname_immdt, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
@@ -385,9 +422,9 @@ register_opcode_status register_req_opcode_series(
         /* middle          = */ false,
         /* end             = */ true,
         /* series_id       = */ start_opcode_num
-      ));
-    if(ret==OPCODE_INVALID) return ret;
-    compound(&ret, __register_req_opcode(
+      );
+    if(ret) goto err4;
+    ret = __register_req_opcode(
         only_opcode_num_immdt, onlyname_immdt, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
@@ -399,11 +436,14 @@ register_opcode_status register_req_opcode_series(
         /* middle          = */ false,
         /* end             = */ true,
         /* series_id       = */ start_opcode_num
-        ));
-    if(ret==OPCODE_INVALID) return ret;
+        );
+    if(ret) {
+      __deregister_opcode(end_opcode_num_immdt);
+      goto err4;
+    }
   }
   if(invalidate==BOTH) {
-    compound(&ret, __register_req_opcode(
+    ret = __register_req_opcode(
         end_opcode_num_inv, endname_inv, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
@@ -415,9 +455,9 @@ register_opcode_status register_req_opcode_series(
         /* middle          = */ false,
         /* end             = */ true,
         /* series_id       = */ start_opcode_num
-        ));
-    if(ret==OPCODE_INVALID) return ret;
-    compound(&ret, __register_req_opcode(
+        );
+    if(ret) goto err4;
+    ret = __register_req_opcode(
         only_opcode_num_inv, onlyname_inv, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
@@ -430,9 +470,40 @@ register_opcode_status register_req_opcode_series(
         /* middle          = */ false,
         /* end             = */ true,
         /* series_id       = */ start_opcode_num
-        ));
-    if(ret==OPCODE_INVALID) return ret;
+        );
+    if(ret) {
+      __deregister_opcode(end_opcode_num_inv);
+      goto err4;
+    }
   }
+  // Successfully registered all req_opcodes.  Now register with the wr_opcodes
+  rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_set.start_opcode_num = start_opcode_num;
+  rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_set.middle_opcode_num = middle_opcode_num;
+  rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_set.end_opcode_num = end_opcode_num;
+  rxe_wr_opcode_info[wr_opcode_num].opcodes[qpt].opcode_set.only_opcode_num = only_opcode_num;
+  if(immdt==BOTH) {
+    rxe_wr_opcode_info[wr_opcode_num_immdt].opcodes[qpt].opcode_set.start_opcode_num = start_opcode_num;
+    rxe_wr_opcode_info[wr_opcode_num_immdt].opcodes[qpt].opcode_set.middle_opcode_num = middle_opcode_num;
+    rxe_wr_opcode_info[wr_opcode_num_immdt].opcodes[qpt].opcode_set.end_opcode_num = end_opcode_num_immdt;
+    rxe_wr_opcode_info[wr_opcode_num_immdt].opcodes[qpt].opcode_set.only_opcode_num = only_opcode_num_immdt;
+  }
+  if(invalidate==BOTH) {
+    rxe_wr_opcode_info[wr_opcode_num_inv].opcodes[qpt].opcode_set.start_opcode_num = start_opcode_num;
+    rxe_wr_opcode_info[wr_opcode_num_inv].opcodes[qpt].opcode_set.middle_opcode_num = middle_opcode_num;
+    rxe_wr_opcode_info[wr_opcode_num_inv].opcodes[qpt].opcode_set.end_opcode_num = end_opcode_num_inv;
+    rxe_wr_opcode_info[wr_opcode_num_inv].opcodes[qpt].opcode_set.only_opcode_num = only_opcode_num_inv;
+  }
+  return ret;
+
+err4:
+  __deregister_opcode(only_opcode_num);
+err3:
+  __deregister_opcode(end_opcode_num);
+err2:
+  __deregister_opcode(middle_opcode_num);
+err1:
+  __deregister_opcode(start_opcode_num);
+err0:
   return ret;
 }
 
@@ -457,18 +528,26 @@ register_opcode_status register_ack_opcode_series(
   strcat(middlename, "_middle");
   strcat(endname, "_end");
   strcat(onlyname, "_only");
-  compound(&ret, __register_ack_opcode(start_opcode_num, startname,
-      handle_incoming, atomicack, true, false, false, start_opcode_num));
-  if(ret==OPCODE_INVALID) return ret;
-  compound(&ret, __register_ack_opcode(middle_opcode_num, middlename,
-      handle_incoming, atomicack, false, true, false, start_opcode_num));
-  if(ret==OPCODE_INVALID) return ret;
-  compound(&ret, __register_ack_opcode(end_opcode_num, endname,
-      handle_incoming, atomicack, false, false, true, start_opcode_num));
-  if(ret==OPCODE_INVALID) return ret;
-  compound(&ret, __register_ack_opcode(only_opcode_num, onlyname,
-      handle_incoming, atomicack, true, false, true, start_opcode_num));
-  if(ret==OPCODE_INVALID) return ret;
+  ret = __register_ack_opcode(start_opcode_num, startname,
+      handle_incoming, atomicack, true, false, false, start_opcode_num);
+  if(ret) goto err0;
+  ret = __register_ack_opcode(middle_opcode_num, middlename,
+      handle_incoming, atomicack, false, true, false, start_opcode_num);
+  if(ret) goto err1;
+  ret = __register_ack_opcode(end_opcode_num, endname,
+      handle_incoming, atomicack, false, false, true, start_opcode_num);
+  if(ret) goto err2;
+  ret = __register_ack_opcode(only_opcode_num, onlyname,
+      handle_incoming, atomicack, true, false, true, start_opcode_num);
+  if(ret) goto err3;
+  return ret;
 
+err3:
+  __deregister_opcode(end_opcode_num);
+err2:
+  __deregister_opcode(middle_opcode_num);
+err1:
+  __deregister_opcode(start_opcode_num);
+err0:
   return ret;
 }

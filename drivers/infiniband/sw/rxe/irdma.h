@@ -76,10 +76,26 @@ enum rxe_wr_mask {
 
 #define WR_MAX_QPT		(8)
 
+struct rxe_opcode_set {
+  unsigned start_opcode_num;
+  unsigned middle_opcode_num;
+  unsigned end_opcode_num;
+  unsigned only_opcode_num;
+};
+
 struct rxe_wr_opcode_info {
 	char			    *name;
-	enum rxe_wr_mask	mask[WR_MAX_QPT];
+	enum rxe_wr_mask	mask;
+    bool                qpts[WR_MAX_QPT];  // which qpts this wr_opcode supports
     enum ib_wc_opcode   wc_opcode;
+    bool                is_series;
+    union {
+      unsigned opcode_num;  // valid for is_series==FALSE
+      struct rxe_opcode_set opcode_set; // valid for is_series==TRUE
+        // '0' for opcode_num or for opcode_set.start_opcode_num indicates not yet registered
+        // note that '0' is never valid here; we reserved the opcode value '0' (for this and for NAK)
+        // TODO if someone tries to use not-yet-registered opcode num or set, give suitable error msg
+    } opcodes[WR_MAX_QPT];
     unsigned            ack_opcode_num;
 };
 
@@ -153,12 +169,14 @@ extern struct rxe_wr_opcode_info rxe_wr_opcode_info[IRDMA_MAX_WR_OPCODES];
 #define IRDMA_MAX_RXE_OPCODES 256
 extern struct rxe_opcode_info rxe_opcode[IRDMA_MAX_RXE_OPCODES];
 
-typedef enum { OPCODE_OK, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
+typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
 
 // wr_opcode_num : the desired wr_opcode_num (not already in use)
 // name : a name for the wr_opcode (max 63 characters, cannot be "")
 // qpts : pointer to array of qp types this wr_opcode is compatible with
 // num_qpts : length of the qpts array (number of compatible qp types)
+// series : whether the wr_opcode is associated with a series of opcodes or not
+//   For more information see comments on register_req_opcode_series()
 // type : one of WR_SEND_MASK, WR_WRITE_MASK, WR_READ_MASK, WR_ATOMIC_MASK, or WR_REG_MASK
 //   Better explanation TBD
 // wr_inline : explanation TBD
@@ -182,6 +200,7 @@ register_opcode_status register_wr_opcode(
     char* name,
     enum ib_qp_type* qpts,
     unsigned num_qpts,
+    bool series,
     enum rxe_wr_mask type,
     bool wr_inline,
     enum ib_wc_opcode wc_opcode,
@@ -202,8 +221,10 @@ register_opcode_status register_wr_opcode(
 //   (see also irdma_funcs.h)
 // handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
 //   (see also irdma_funcs.h)
-// wr_opcode_num : the number of the wr_opcode_num for this opcode
-//   (previously registered with register_wr_opcode)
+// wr_opcode_num : the number of the wr_opcode for this opcode
+//   (previously registered with register_wr_opcode, with series==FALSE)
+//   Each wr_opcode can only have one req_opcode per qpt; you can't register multiple
+//     (single_)req_opcodes with the same wr_opcode and qpt
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // immdt : whether the packet includes an immediate value to be presented to the receiver
 //   'immdt' and 'invalidate' cannot both be TRUE.
@@ -223,10 +244,15 @@ register_opcode_status register_wr_opcode(
 //   OPCODE_OK on success
 //   OPCODE_INVALID if:
 //     - opcode_num is outside allowed range
-//     - wr_opcode_num has not been registered
+//     - wr_opcode_num:
+//        - has not been registered
+//        - was registered with series==TRUE
+//        - was not registered as supporting this qpt
 //     - the 'name' string is too long
 //     - the combination of arguments passed is invalid
-//   OPCODE_IN_USE if the desired opcode_num is already in use
+//   OPCODE_IN_USE if:
+//     - the desired opcode_num is already in use
+//     - a different opcode_num was previously registered with the same wr_opcode_num and qpt
 register_opcode_status register_single_req_opcode(
     unsigned opcode_num,
     char* name,
@@ -257,7 +283,10 @@ enum ynb { YES, NO, BOTH };
 //   irdma_req_opnum: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   handle_incoming: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   handle_duplicate: see comments on register_single_opcode.  Will apply to all four opcodes.
-//   wr_opcode_num: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   wr_opcode_num: the number of the wr_opcode for these opcodes (will apply to all four opcodes)
+//     (previously registered with register_wr_opcode, with series==TRUE)
+//     Each wr_opcode can only have one req_opcode_series per qpt; you can't register multiple
+//       req_opcode_series with the same wr_opcode and qpt
 //   qpt: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   immdt: whether the series includes an immediate value to be presented to the receiver.
 //     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the immediate.
@@ -271,6 +300,7 @@ enum ynb { YES, NO, BOTH };
 //     See also below, 'immdt--invalidate restriction'
 //   end_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
 //   only_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
+//   wr_opcode_num_immdt: see comments on 'immdt' above; only used if immdt==BOTH, else ignored
 //   invalidate : whether the packet should (in addition to whatever else it does) 'invalidate'
 //     a remote memory region.
 //     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the invalidate.
@@ -284,6 +314,7 @@ enum ynb { YES, NO, BOTH };
 //     See also below, 'immdt-invalidate restriction'
 //   end_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
 //   only_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
+//   wr_opcode_num_inv: see comments on 'invalidate' above; only used if invalidate==BOTH, else ignored
 //   requiresReceive : whether the operation requires that the receiver has posted a 'receive' WQE
 //     The 'receive' WQE will be required for opcodes which start the series (i.e. 'start' and 'only').
 //     If requiresReceive==FALSE but the series carries an immediate, a 'receive' WQE will still be required,
@@ -316,15 +347,18 @@ enum ynb { YES, NO, BOTH };
 //   OPCODE_OK on success
 //   OPCODE_INVALID if:
 //     - any of the opcode_nums (the ones that are not ignored per the rules above) are outside allowed range
-//     - any of the (not-ignored) wr_opcode_nums have not been registered
+//     - any of the (not-ignored) wr_opcode_nums:
+//        - have not been registered
+//        - were registered with series==FALSE
+//        - were not registered as supporting this qpt
 //     - the 'basename' string is too long
 //     - the combination of arguments passed is invalid
-//     In this case there is no guarantee given as to which of the series opcodes may or may not have
-//     been successfully registered; the only guarantee is that the state remains consistent
-//     i.e. each opcode is either fully registered or fully not.
-//   OPCODE_IN_USE if any of the (not-ignored) opcode_nums were already in use
-//     In this case, all the requested opcode_nums which were not already in use are guaranteed to be
-//     properly registered before this function returns.
+//   OPCODE_IN_USE if:
+//     - any of the (not-ignored) opcode_nums were already in use
+//     - any of the (not-ignored) wr_opcode_nums were previously used for a different opcode_series
+//         registration with the same qpt
+//   In either of the error cases, the state when the function returns is guaranteed to be equivalent to
+//     the state as if the erroneous function call never happened - none of the new items will be registered.
 register_opcode_status register_req_opcode_series(
     unsigned start_opcode_num,
     unsigned middle_opcode_num,
@@ -376,12 +410,9 @@ register_opcode_status register_single_ack_opcode(
 // returns:
 //   OPCODE_OK on success
 //   OPCODE_INVALID if any of the opcode_nums are outside allowed range or if 'basename' is too long
-//     In this case there is no guarantee given as to which of the series opcodes may or may not have
-//     been successfully registered; the only guarantee is that the state remains consistent
-//     i.e. each opcode is either fully registered or fully not.
 //   OPCODE_IN_USE if any of the opcode_nums were already in use
-//     In this case, all the requested opcode_nums which were not already in use are guaranteed to be
-//     properly registered before this function returns.
+//   In either of the error cases, the state when the function returns is guaranteed to be equivalent to
+//     the state as if the erroneous function call never happened - none of the new items will be registered.
 register_opcode_status register_ack_opcode_series(
     unsigned start_opcode_num,
     unsigned middle_opcode_num,
