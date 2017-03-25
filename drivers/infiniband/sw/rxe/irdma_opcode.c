@@ -581,7 +581,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.irdma_req_opnum  = */ IRDMA_REQ_SEND,
       /*.handle_incoming  = */ &handle_incoming_send,
       /*.handle_duplicate = */ &handle_duplicate_sendorwrite,
-      /*.wr_opcode_num   = */ IB_WR_SEND,
+      /*.wr_opcode_num   = */ IB_WR_SEND_WITH_IMM,
       /*.qpt             = */ IB_QPT_UD,
       /*.immdt           = */ true,
       /*.invalidate      = */ false,

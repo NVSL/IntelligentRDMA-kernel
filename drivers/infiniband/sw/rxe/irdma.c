@@ -236,7 +236,9 @@ register_opcode_status register_single_req_opcode(
 ) {
   register_opcode_status st;
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
-  if(unlikely(rxe_wr_opcode_info[wr_opcode_num].is_series)) return OPCODE_INVALID;
+  if(unlikely(qpt!=IB_QPT_UD && rxe_wr_opcode_info[wr_opcode_num].is_series)) return OPCODE_INVALID;
+    // Ugly, but IB_QPT_UD needs to be allowed to register single req_opcodes with series wr_opcodes
+    // Any function which checks rxe_wr_opcode_info[x].is_series needs to be aware of this exception too
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].qpts[qpt])) return OPCODE_INVALID;
     // More elegant would be, don't make the user declare supported qpts when registering wr_opcode,
     //   and instead just assume that qpts with registered opcodes are supported, and without are not

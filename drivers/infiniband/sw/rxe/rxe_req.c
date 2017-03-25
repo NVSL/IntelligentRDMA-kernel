@@ -187,158 +187,34 @@ static struct rxe_send_wqe *req_next_wqe(struct rxe_qp *qp)
 	return wqe;
 }
 
-static int next_opcode_rc(struct rxe_qp *qp, u32 opcode, int fits)
-{
-	switch (opcode) {
-	case IB_WR_RDMA_WRITE:
-		if (qp->req.opcode == IB_OPCODE_RC_RDMA_WRITE_FIRST ||
-		    qp->req.opcode == IB_OPCODE_RC_RDMA_WRITE_MIDDLE)
-			return fits ?
-				IB_OPCODE_RC_RDMA_WRITE_LAST :
-				IB_OPCODE_RC_RDMA_WRITE_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_RC_RDMA_WRITE_ONLY :
-				IB_OPCODE_RC_RDMA_WRITE_FIRST;
-
-	case IB_WR_RDMA_WRITE_WITH_IMM:
-		if (qp->req.opcode == IB_OPCODE_RC_RDMA_WRITE_FIRST ||
-		    qp->req.opcode == IB_OPCODE_RC_RDMA_WRITE_MIDDLE)
-			return fits ?
-				IB_OPCODE_RC_RDMA_WRITE_LAST_WITH_IMMEDIATE :
-				IB_OPCODE_RC_RDMA_WRITE_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_RC_RDMA_WRITE_ONLY_WITH_IMMEDIATE :
-				IB_OPCODE_RC_RDMA_WRITE_FIRST;
-
-	case IB_WR_SEND:
-		if (qp->req.opcode == IB_OPCODE_RC_SEND_FIRST ||
-		    qp->req.opcode == IB_OPCODE_RC_SEND_MIDDLE)
-			return fits ?
-				IB_OPCODE_RC_SEND_LAST :
-				IB_OPCODE_RC_SEND_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_RC_SEND_ONLY :
-				IB_OPCODE_RC_SEND_FIRST;
-
-	case IB_WR_SEND_WITH_IMM:
-		if (qp->req.opcode == IB_OPCODE_RC_SEND_FIRST ||
-		    qp->req.opcode == IB_OPCODE_RC_SEND_MIDDLE)
-			return fits ?
-				IB_OPCODE_RC_SEND_LAST_WITH_IMMEDIATE :
-				IB_OPCODE_RC_SEND_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_RC_SEND_ONLY_WITH_IMMEDIATE :
-				IB_OPCODE_RC_SEND_FIRST;
-
-	case IB_WR_RDMA_READ:
-		return IB_OPCODE_RC_RDMA_READ_REQUEST;
-
-	case IB_WR_ATOMIC_CMP_AND_SWP:
-		return IB_OPCODE_RC_COMPARE_SWAP;
-
-	case IB_WR_ATOMIC_FETCH_AND_ADD:
-		return IB_OPCODE_RC_FETCH_ADD;
-
-	case IB_WR_SEND_WITH_INV:
-		if (qp->req.opcode == IB_OPCODE_RC_SEND_FIRST ||
-		    qp->req.opcode == IB_OPCODE_RC_SEND_MIDDLE)
-			return fits ? IB_OPCODE_RC_SEND_LAST_WITH_INVALIDATE :
-				IB_OPCODE_RC_SEND_MIDDLE;
-		else
-			return fits ? IB_OPCODE_RC_SEND_ONLY_WITH_INVALIDATE :
-				IB_OPCODE_RC_SEND_FIRST;
-	case IB_WR_REG_MR:
-	case IB_WR_LOCAL_INV:
-		return opcode;
-	}
-
-	return -EINVAL;
-}
-
-static int next_opcode_uc(struct rxe_qp *qp, u32 opcode, int fits)
-{
-	switch (opcode) {
-	case IB_WR_RDMA_WRITE:
-		if (qp->req.opcode == IB_OPCODE_UC_RDMA_WRITE_FIRST ||
-		    qp->req.opcode == IB_OPCODE_UC_RDMA_WRITE_MIDDLE)
-			return fits ?
-				IB_OPCODE_UC_RDMA_WRITE_LAST :
-				IB_OPCODE_UC_RDMA_WRITE_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_UC_RDMA_WRITE_ONLY :
-				IB_OPCODE_UC_RDMA_WRITE_FIRST;
-
-	case IB_WR_RDMA_WRITE_WITH_IMM:
-		if (qp->req.opcode == IB_OPCODE_UC_RDMA_WRITE_FIRST ||
-		    qp->req.opcode == IB_OPCODE_UC_RDMA_WRITE_MIDDLE)
-			return fits ?
-				IB_OPCODE_UC_RDMA_WRITE_LAST_WITH_IMMEDIATE :
-				IB_OPCODE_UC_RDMA_WRITE_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_UC_RDMA_WRITE_ONLY_WITH_IMMEDIATE :
-				IB_OPCODE_UC_RDMA_WRITE_FIRST;
-
-	case IB_WR_SEND:
-		if (qp->req.opcode == IB_OPCODE_UC_SEND_FIRST ||
-		    qp->req.opcode == IB_OPCODE_UC_SEND_MIDDLE)
-			return fits ?
-				IB_OPCODE_UC_SEND_LAST :
-				IB_OPCODE_UC_SEND_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_UC_SEND_ONLY :
-				IB_OPCODE_UC_SEND_FIRST;
-
-	case IB_WR_SEND_WITH_IMM:
-		if (qp->req.opcode == IB_OPCODE_UC_SEND_FIRST ||
-		    qp->req.opcode == IB_OPCODE_UC_SEND_MIDDLE)
-			return fits ?
-				IB_OPCODE_UC_SEND_LAST_WITH_IMMEDIATE :
-				IB_OPCODE_UC_SEND_MIDDLE;
-		else
-			return fits ?
-				IB_OPCODE_UC_SEND_ONLY_WITH_IMMEDIATE :
-				IB_OPCODE_UC_SEND_FIRST;
-	}
-
-	return -EINVAL;
-}
-
 static int next_opcode(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
-		       u32 opcode)
+		       u32 wr_opcode)
 {
-	int fits = (wqe->dma.resid <= qp->mtu);
+  int fits = (wqe->dma.resid <= qp->mtu);
+  enum ib_qp_type qpt = qp_type(qp);
+  struct rxe_wr_opcode_info info = rxe_wr_opcode_info[wr_opcode];
+  if(!info.name[0]) return -EINVAL;  // this wr_opcode not registered
 
-	switch (qp_type(qp)) {
-	case IB_QPT_RC:
-		return next_opcode_rc(qp, opcode, fits);
+  if(qpt==IB_QPT_SMI || qpt==IB_QPT_GSI) qpt = IB_QPT_UD;
+    // for this function, we handle SMI and GSI like UD (returning a UD opcode)
 
-	case IB_QPT_UC:
-		return next_opcode_uc(qp, opcode, fits);
+  // We handle WR_REG_MASK wr_opcodes this way for I-have-no-idea-what reason
+  // but the existing code did the equivalent to this
+  if(info.mask & WR_REG_MASK) return wr_opcode;
 
-	case IB_QPT_SMI:
-	case IB_QPT_UD:
-	case IB_QPT_GSI:
-		switch (opcode) {
-		case IB_WR_SEND:
-			return IB_OPCODE_UD_SEND_ONLY;
-
-		case IB_WR_SEND_WITH_IMM:
-			return IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	return -EINVAL;
+  if(info.is_series && qp_type(qp)!=IB_QPT_UD) {
+    // for comments on the UD exception, see comments in irdma.c
+    struct rxe_opcode_set set = info.opcodes[qp_type(qp)].opcode_set;
+    if(set.start_opcode_num == 0) return -EINVAL;  // no opcode_series registered for this wr_opcode and qpt
+    if(qp->req.opcode == set.start_opcode_num || qp->req.opcode == set.middle_opcode_num)
+      return fits ? set.end_opcode_num : set.middle_opcode_num;
+    else
+      return fits ? set.only_opcode_num : set.start_opcode_num;
+  } else {
+    unsigned opcode_num = info.opcodes[qp_type(qp)].opcode_num;
+    if(opcode_num == 0) return -EINVAL;  // no req_opcode registered for this wr_opcode and qpt
+    return opcode_num;
+  }
 }
 
 static inline int check_init_depth(struct rxe_qp *qp, struct rxe_send_wqe *wqe)
