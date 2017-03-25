@@ -466,6 +466,7 @@ register_opcode_status irdma_init_opcodes(void) {
                               IB_WR_SEND_WITH_INV,
       /*.requiresReceive = */ true,
       /*.postComplete    = */ true,
+      /*.perms           = */ IRDMA_PERM_NONE,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_req_opcode_series(
@@ -489,6 +490,7 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_WRITE,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
@@ -501,6 +503,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_READ,
       /*.sched_priority  = */ true
   ))
   WITH_CHECK(register_single_req_opcode(
@@ -513,6 +516,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_ATOMIC,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
@@ -525,6 +529,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_ATOMIC,
       /*.sched_priority  = */ false
   ))
 
@@ -550,6 +555,7 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ true,
       /*.postComplete    = */ true,
+      /*.perms           = */ IRDMA_PERM_NONE,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_req_opcode_series(
@@ -573,6 +579,7 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_WRITE,
       /*.sched_priority  = */ false
   ))
 
@@ -587,6 +594,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_UD,
       /*.requiresReceive = */ true,
       /*.postComplete    = */ true,
+      /*.perms           = */ IRDMA_PERM_NONE,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
@@ -599,6 +607,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_UD,
       /*.requiresReceive = */ true,
       /*.postComplete    = */ true,
+      /*.perms           = */ IRDMA_PERM_NONE,
       /*.sched_priority  = */ false
   ))
 
@@ -657,6 +666,7 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ true,
       /*.postComplete    = */ true,
+      /*.perms           = */ IRDMA_PERM_NONE,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_req_opcode_series(
@@ -680,6 +690,7 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_WRITE,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
@@ -694,6 +705,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_READ,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
@@ -708,6 +720,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_ATOMIC,
       /*.sched_priority  = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
@@ -722,6 +735,7 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.postComplete    = */ false,
+      /*.perms           = */ IRDMA_PERM_ATOMIC,
       /*.sched_priority  = */ false
   ))
 #endif  // if 0

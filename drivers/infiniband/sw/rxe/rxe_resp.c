@@ -263,37 +263,20 @@ static enum resp_states check_op_seq(struct rxe_qp *qp,
 static enum resp_states check_op_valid(struct rxe_qp *qp,
 				       struct rxe_pkt_info *pkt)
 {
-	switch (qp_type(qp)) {
-	case IB_QPT_RC:
-		if (((pkt->irdma_opnum == IRDMA_REQ_READ) &&
-		     !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_READ)) ||
-		    ((pkt->irdma_opnum == IRDMA_REQ_WRITE) &&
-		     !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_WRITE)) ||
-		    ((pkt->irdma_opnum = IRDMA_REQ_ATOMIC) &&
-		     !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_ATOMIC))) {
-			return RESPST_ERR_UNSUPPORTED_OPCODE;
-		}
-
-		break;
-
-	case IB_QPT_UC:
-		if ((pkt->irdma_opnum == IRDMA_REQ_WRITE) &&
-		    !(qp->attr.qp_access_flags & IB_ACCESS_REMOTE_WRITE)) {
-			qp->resp.drop_msg = 1;
-			return RESPST_CLEANUP;
-		}
-
-		break;
-
-	case IB_QPT_UD:
-	case IB_QPT_SMI:
-	case IB_QPT_GSI:
-		break;
-
-	default:
-		WARN_ON(1);
-		break;
-	}
+    unsigned char have_perms = qp->attr.qp_access_flags;
+    unsigned char need_perms = rxe_opcode[pkt->opcode].req.perms;
+    if((need_perms & have_perms) != need_perms) {
+      // missing required perms
+      if(qp_type(qp) == IB_QPT_RC) {
+        return RESPST_ERR_UNSUPPORTED_OPCODE;
+      } else if(qp_type(qp) == IB_QPT_UC) {
+        qp->resp.drop_msg = 1;
+        return RESPST_CLEANUP;
+      } else {
+        // do nothing
+        // Note this case unreachable in existing code - only RC and UC ops have required perms
+      }
+    }
 
 	return RESPST_CHK_RESOURCE;
 }

@@ -153,6 +153,7 @@ struct rxe_opcode_info {
         unsigned wr_opcode_num;
         handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*);
         handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*);
+        unsigned char perms;
       } req;  // only valid if is_ack==FALSE
       struct {
         handle_ack_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*, struct rxe_send_wqe*);
@@ -169,6 +170,11 @@ struct rxe_opcode_info {
 extern struct rxe_wr_opcode_info rxe_wr_opcode_info[IRDMA_MAX_WR_OPCODES];
 #define IRDMA_MAX_RXE_OPCODES 256
 extern struct rxe_opcode_info rxe_opcode[IRDMA_MAX_RXE_OPCODES];
+
+#define IRDMA_PERM_READ (IB_ACCESS_REMOTE_READ)
+#define IRDMA_PERM_WRITE (IB_ACCESS_REMOTE_WRITE)
+#define IRDMA_PERM_ATOMIC (IB_ACCESS_REMOTE_ATOMIC)
+#define IRDMA_PERM_NONE (0)
 
 typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
 
@@ -239,6 +245,9 @@ register_opcode_status register_wr_opcode(
 // postComplete : whether a 'cqe' should be posted to the completion queue upon operation completion
 //   If immdt==TRUE, postComplete must be TRUE.
 //   TODO: also if invalidate==TRUE?
+// perms : what permissions the *receiving* qp is required to have on *its* machine.
+//   Should be one of IRDMA_PERM_READ, IRDMA_PERM_WRITE, IRDMA_PERM_ATOMIC, IRDMA_PERM_NONE
+//   or a bitwise-OR of any of these, to require multiple permissions.
 // sched_priority : to my current understanding, setting this to TRUE instructs the
 //   internal scheduler to always handle an incoming packet of this type immediately,
 //   pushing aside other tasks (e.g. posting sends, completes, etc).
@@ -264,7 +273,7 @@ register_opcode_status register_single_req_opcode(
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
-    bool requiresReceive, bool postComplete, bool sched_priority
+    bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority
 );
 
 enum ynb { YES, NO, BOTH };
@@ -336,6 +345,7 @@ enum ynb { YES, NO, BOTH };
 //     TODO: Unclear if we should handle invalidate==YES or invalidate==BOTH similarly?
 //       No examples of postComplete==FALSE + invalidate==YES/BOTH in the existing opcodes
 //       Provisionally, I'm treating invalidate==YES/BOTH like immdt==YES/BOTH for postComplete
+//   perms : see comments on register_single_opcode.  Will apply to all four opcodes.
 //   sched_priority : to my current understanding, setting this to TRUE instructs the
 //     internal scheduler to always handle incoming packets from this series immediately,
 //     pushing aside other tasks (e.g. posting sends, completes, etc).
@@ -379,7 +389,7 @@ register_opcode_status register_req_opcode_series(
     enum ib_qp_type qpt,
     enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
     enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
-    bool requiresReceive, bool postComplete, bool sched_priority
+    bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority
 );
 
 // Register an 'ack' opcode. 'ack' opcodes are issued in response to 'request' opcodes,
