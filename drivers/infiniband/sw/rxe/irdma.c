@@ -180,6 +180,9 @@ static register_opcode_status __register_req_opcode(
         // RXE_DETH_MASK indicates whether the packet needs a 'datagram extended transport header'.
         // The rule here reflects existing convention.
     | SET_IF((false /*qpt == IB_QPT_RD*/ || qpt == IB_QPT_UD), RXE_DETH_MASK)
+        // I invented IRDMA_RES_MASK to indicate which packets need "responder resources" available
+        // on the receive side.  The rule here reflects existing convention.
+    | SET_IF(irdma_req_opnum == IRDMA_REQ_READ || irdma_req_opnum == IRDMA_REQ_ATOMIC, IRDMA_RES_MASK)
   ;
   strcpy(rxe_opcode[opcode_num].name, name);
   rxe_opcode[opcode_num].mask = mask;

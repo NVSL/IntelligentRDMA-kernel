@@ -139,6 +139,7 @@ enum rxe_hdr_mask {
 	RXE_LOOPBACK_MASK	= BIT(NUM_HDR_TYPES + 5),
 
     IRDMA_SCHED_PRIORITY_MASK = BIT(NUM_HDR_TYPES + 6),
+    IRDMA_RES_MASK      = BIT(NUM_HDR_TYPES + 7),
 };
 
 #define OPCODE_NONE		(-1)

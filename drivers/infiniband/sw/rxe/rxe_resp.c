@@ -61,7 +61,6 @@ enum resp_states {
 	RESPST_ERR_MISSING_OPCODE_FIRST,
 	RESPST_ERR_MISSING_OPCODE_LAST_C,
 	RESPST_ERR_MISSING_OPCODE_LAST_D1E,
-	RESPST_ERR_TOO_MANY_RDMA_ATM_REQ,
 	RESPST_ERR_RNR,
 	RESPST_ERR_RKEY_VIOLATION,
 	RESPST_ERR_LENGTH,
@@ -91,7 +90,6 @@ static char *resp_state_name[] = {
 	[RESPST_ERR_MISSING_OPCODE_FIRST]	= "ERR_MISSING_OPCODE_FIRST",
 	[RESPST_ERR_MISSING_OPCODE_LAST_C]	= "ERR_MISSING_OPCODE_LAST_C",
 	[RESPST_ERR_MISSING_OPCODE_LAST_D1E]	= "ERR_MISSING_OPCODE_LAST_D1E",
-	[RESPST_ERR_TOO_MANY_RDMA_ATM_REQ]	= "ERR_TOO_MANY_RDMA_ATM_REQ",
 	[RESPST_ERR_RNR]			= "ERR_RNR",
 	[RESPST_ERR_RKEY_VIOLATION]		= "ERR_RKEY_VIOLATION",
 	[RESPST_ERR_LENGTH]			= "ERR_LENGTH",
@@ -345,15 +343,23 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 		}
 	}
 
-	if (pkt->irdma_opnum == IRDMA_REQ_READ || pkt->irdma_opnum == IRDMA_REQ_ATOMIC) {
+	if (rxe_opcode[pkt->opcode].mask & IRDMA_RES_MASK) {
 		/* it is the requesters job to not send
 		 * too many read/atomic ops, we just
 		 * recycle the responder resource queue
 		 */
-		if (likely(qp->attr.max_dest_rd_atomic > 0))
+        // CD note: It appears the above comment has nothing at all to do
+        //   with the code here.  Rather, the code seems only to be ensuring
+        //   that rd_atomic resources have been allocated; it doesn't check
+        //   anything about how many are in use
+		if (likely(qp->attr.max_dest_rd_atomic > 0)) {
 			return RESPST_CHK_LENGTH;
-		else
-			return RESPST_ERR_TOO_MANY_RDMA_ATM_REQ;
+        } else {
+            struct irdma_context ic = { qp };
+			do_class_ac_error(&ic, AETH_NAK_INVALID_REQ,
+					  IB_WC_REM_INV_REQ_ERR);
+            return RESPST_COMPLETE;
+        }
 	}
 
 	if (pkt->mask & RXE_RWR_MASK) {
@@ -787,7 +793,6 @@ int rxe_responder(void *arg)
 			state = RESPST_CLEANUP;
 			break;
 
-		case RESPST_ERR_TOO_MANY_RDMA_ATM_REQ:
 		case RESPST_ERR_MISSING_OPCODE_FIRST:
 		case RESPST_ERR_MISSING_OPCODE_LAST_C:
 		case RESPST_ERR_UNSUPPORTED_OPCODE:
