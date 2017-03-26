@@ -673,38 +673,29 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 		wr->wr.ud.remote_qpn = ud_wr(ibwr)->remote_qpn;
 		wr->wr.ud.remote_qkey = ud_wr(ibwr)->remote_qkey;
 		if (qp_type(qp) == IB_QPT_GSI)
-			wr->wr.ud.pkey_index = ud_wr(ibwr)->pkey_index;
-	} else {
-		switch (wr_opcode) {
-		case IB_WR_RDMA_WRITE_WITH_IMM:
-		case IB_WR_RDMA_READ:
-		case IB_WR_RDMA_WRITE:
-			wr->wr.rdma.remote_addr = rdma_wr(ibwr)->remote_addr;
-			wr->wr.rdma.rkey	= rdma_wr(ibwr)->rkey;
-			break;
-		case IB_WR_SEND_WITH_IMM:
-			break;
-		case IB_WR_SEND_WITH_INV:
-			break;
-		case IB_WR_ATOMIC_CMP_AND_SWP:
-		case IB_WR_ATOMIC_FETCH_AND_ADD:
-			wr->wr.atomic.remote_addr =
-				atomic_wr(ibwr)->remote_addr;
-			wr->wr.atomic.compare_add =
-				atomic_wr(ibwr)->compare_add;
-			wr->wr.atomic.swap = atomic_wr(ibwr)->swap;
-			wr->wr.atomic.rkey = atomic_wr(ibwr)->rkey;
-			break;
-		case IB_WR_LOCAL_INV:
-            break;
-		case IB_WR_REG_MR:
-			wr->wr.reg.mr = reg_wr(ibwr)->mr;
-			wr->wr.reg.key = reg_wr(ibwr)->key;
-			wr->wr.reg.access = reg_wr(ibwr)->access;
-            break;
-		default:
-			break;
-		}
+          wr->wr.ud.pkey_index = ud_wr(ibwr)->pkey_index;
+	} else if(rxe_wr_opcode_info[wr_opcode].mask & WR_READ_MASK
+              || rxe_wr_opcode_info[wr_opcode].mask & WR_WRITE_MASK) {
+        // more to the point, "if any packet in series has RXE_RETH_MASK"
+        wr->wr.rdma.remote_addr = rdma_wr(ibwr)->remote_addr;
+        wr->wr.rdma.rkey	= rdma_wr(ibwr)->rkey;
+    } else if(rxe_wr_opcode_info[wr_opcode].mask & WR_SEND_MASK) {
+        // do nothing
+    } else if(rxe_wr_opcode_info[wr_opcode].mask & WR_ATOMIC_MASK) {
+        // more to the point, "if any packet in series has RXE_ATMETH_MASK"
+        wr->wr.atomic.remote_addr =
+            atomic_wr(ibwr)->remote_addr;
+        wr->wr.atomic.compare_add =
+            atomic_wr(ibwr)->compare_add;
+        wr->wr.atomic.swap = atomic_wr(ibwr)->swap;
+        wr->wr.atomic.rkey = atomic_wr(ibwr)->rkey;
+    } else if(rxe_wr_opcode_info[wr_opcode].mask & WR_REG_MASK) {
+        // existing code did this only for IB_WR_REG_MR,
+        // but there's no harm doing it for all WR_REG_MASK requests
+        // (as far as I can tell)
+        wr->wr.reg.mr = reg_wr(ibwr)->mr;
+        wr->wr.reg.key = reg_wr(ibwr)->key;
+        wr->wr.reg.access = reg_wr(ibwr)->access;
 	}
 }
 
