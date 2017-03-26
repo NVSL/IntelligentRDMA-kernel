@@ -532,9 +532,7 @@ static enum resp_states do_complete(struct rxe_qp *qp,
 
 	/* fields after status are not required for errors */
 	if (wc->status == IB_WC_SUCCESS) {
-		wc->opcode = (pkt->mask & RXE_IMMDT_MASK &&
-				pkt->irdma_opnum == IRDMA_REQ_WRITE) ?
-					IB_WC_RECV_RDMA_WITH_IMM : IB_WC_RECV;
+		wc->opcode = rxe_wr_opcode_info[rxe_opcode[pkt->opcode].req.wr_opcode_num].receiver_wc_opcode;
 		wc->vendor_err = 0;
 		wc->byte_len = wqe->dma.length - wqe->dma.resid;
 

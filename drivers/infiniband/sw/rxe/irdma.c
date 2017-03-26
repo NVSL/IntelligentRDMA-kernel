@@ -26,7 +26,8 @@ register_opcode_status register_wr_opcode(
     bool invalidate,
     bool wr_inline,
     bool alwaysEnableSolicited,
-    enum ib_wc_opcode wc_opcode,
+    enum ib_wc_opcode sender_wc_opcode,
+    bool postComplete, enum ib_wc_opcode receiver_wc_opcode,
     unsigned ack_opcode_num
 ) {
   unsigned i;
@@ -36,6 +37,8 @@ register_opcode_status register_wr_opcode(
   if(!name[0]) return OPCODE_INVALID;
   if(rxe_wr_opcode_info[wr_opcode_num].name[0]) return OPCODE_IN_USE;  // name=="" indicates free
     // TODO if someone tries to actually use a not-yet-registered wr_opcode, give a suitable error msg
+  if(immdt && !postComplete) return OPCODE_INVALID;
+  if(invalidate && !postComplete) return OPCODE_INVALID;
   if(!ack_opcode_info.name[0]) return OPCODE_INVALID;
   if(!ack_opcode_info.is_ack) return OPCODE_INVALID;
   if(!(ack_opcode_info.mask & RXE_START_MASK)) return OPCODE_INVALID;
@@ -59,11 +62,13 @@ register_opcode_status register_wr_opcode(
       (wr_inline ? WR_INLINE_MASK : 0)
     | (immdt ? WR_IMMDT_MASK : 0)
     | (invalidate ? WR_INV_MASK : 0)
+    | (postComplete ? WR_COMP_MASK : 0)
     | (alwaysEnableSolicited ? WR_SOLICITED_MASK : 0)
     | type;
   for(i = 0; i < WR_MAX_QPT; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[i] = false;
   for(i = 0; i < num_qpts; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[qpts[i]] = true;
-  rxe_wr_opcode_info[wr_opcode_num].wc_opcode = wc_opcode;
+  rxe_wr_opcode_info[wr_opcode_num].sender_wc_opcode = sender_wc_opcode;
+  rxe_wr_opcode_info[wr_opcode_num].receiver_wc_opcode = receiver_wc_opcode;
   rxe_wr_opcode_info[wr_opcode_num].ack_opcode_num = ack_opcode_num;
   return OPCODE_OK;
 }
@@ -139,6 +144,7 @@ static register_opcode_status __register_req_opcode(
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
   if(unlikely(immdt && !requiresReceive)) return OPCODE_INVALID;
   if(unlikely(immdt && !postComplete)) return OPCODE_INVALID;
+  if(unlikely(invalidate && !postComplete)) return OPCODE_INVALID;
   if(unlikely(strlen(name) > 63)) return OPCODE_INVALID;
 #define SET_IF(cond, set_what) \
   ( (cond) ? (set_what) : 0 )
@@ -251,7 +257,7 @@ register_opcode_status register_single_req_opcode(
   handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
   unsigned wr_opcode_num,
   enum ib_qp_type qpt,
-  bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority
+  bool requiresReceive, unsigned char perms, bool sched_priority
 ) {
   register_opcode_status st;
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
@@ -276,7 +282,9 @@ register_opcode_status register_single_req_opcode(
       qpt,
       /* immdt      = */ rxe_wr_opcode_info[wr_opcode_num].mask & WR_IMMDT_MASK,
       /* invalidate = */ rxe_wr_opcode_info[wr_opcode_num].mask & WR_INV_MASK,
-      requiresReceive, postComplete, perms, sched_priority,
+      requiresReceive,
+      /* postComplete */ rxe_wr_opcode_info[wr_opcode_num].mask & WR_COMP_MASK,
+      perms, sched_priority,
       /* start     = */ true,   /* \                           */
       /* middle    = */ false,  /*  |--  (treat as an 'only')  */
       /* end       = */ true,   /* /                           */
@@ -320,7 +328,7 @@ register_opcode_status register_req_opcode_series(
   enum ib_qp_type qpt,
   enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
   enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
-  bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority
+  bool requiresReceive, unsigned char perms, bool sched_priority
 ) {
   // TODO: Here and in register_ack_opcode_series make sure that we're correctly handling the (error) case where
   //   the user passes in duplicates among the (not-ignored) rxe_opcodes or (not-ignored) wr_opcodes
@@ -333,8 +341,6 @@ register_opcode_status register_req_opcode_series(
   if(unlikely(immdt!=NO && len > 45)) return OPCODE_INVALID;
   if(unlikely(immdt==YES && invalidate!=NO)) return OPCODE_INVALID;
   if(unlikely(invalidate==YES && immdt!=NO)) return OPCODE_INVALID;
-  if(unlikely(immdt==YES && !postComplete)) return OPCODE_INVALID;
-  if(unlikely(invalidate==YES && !postComplete)) return OPCODE_INVALID;
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].name[0])) return OPCODE_INVALID;
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].is_series)) return OPCODE_INVALID;
   if(unlikely(!rxe_wr_opcode_info[wr_opcode_num].qpts[qpt])) return OPCODE_INVALID;
@@ -420,7 +426,7 @@ register_opcode_status register_req_opcode_series(
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
       /* requiresReceive = */ (immdt==YES),
-      /* postComplete    = */ postComplete,
+      /* postComplete    = */ rxe_wr_opcode_info[wr_opcode_num].mask & WR_COMP_MASK,
       /* perms           = */ perms,
       /* sched_priority  = */ sched_priority,
       /* start           = */ false,
@@ -435,7 +441,7 @@ register_opcode_status register_req_opcode_series(
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
       /* requiresReceive = */ requiresReceive || (immdt==YES),
-      /* postComplete    = */ postComplete,
+      /* postComplete    = */ rxe_wr_opcode_info[wr_opcode_num].mask & WR_COMP_MASK,
       /* perms           = */ perms,
       /* sched_priority  = */ sched_priority,
       /* start           = */ true,
@@ -445,13 +451,14 @@ register_opcode_status register_req_opcode_series(
       );
   if(ret) goto err3;
   if(immdt==BOTH) {
+    bool postComplete_immdt = rxe_wr_opcode_info[wr_opcode_num_immdt].mask & WR_COMP_MASK;  // always TRUE
     ret = __register_req_opcode(
         end_opcode_num_immdt, endname_immdt, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
         /* requiresReceive = */ !requiresReceive,
-        /* postComplete    = */ true,
+        /* postComplete    = */ postComplete_immdt,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
         /* start           = */ false,
@@ -466,7 +473,7 @@ register_opcode_status register_req_opcode_series(
         /* immdt           = */ true,
         /* invalidate      = */ false,
         /* requiresReceive = */ true,
-        /* postComplete    = */ true,
+        /* postComplete    = */ postComplete_immdt,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
         /* start           = */ true,
@@ -480,13 +487,14 @@ register_opcode_status register_req_opcode_series(
     }
   }
   if(invalidate==BOTH) {
+    bool postComplete_inv = rxe_wr_opcode_info[wr_opcode_num_inv].mask & WR_COMP_MASK;  // always TRUE
     ret = __register_req_opcode(
         end_opcode_num_inv, endname_inv, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
         /* requiresReceive = */ false,
-        /* postComplete    = */ true,
+        /* postComplete    = */ postComplete_inv,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
         /* start           = */ false,
@@ -501,7 +509,7 @@ register_opcode_status register_req_opcode_series(
         /* immdt           = */ false,
         /* invalidate      = */ true,
         /* requiresReceive = */ requiresReceive,
-        /* postComplete    = */ true,
+        /* postComplete    = */ postComplete_inv,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
         /* start           = */ true,  // the (one) existing ONLY_WITH_INVALIDATE opcode has 'false' here,

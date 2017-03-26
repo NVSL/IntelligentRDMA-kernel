@@ -356,7 +356,7 @@ static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 
 		wc->wr_id		= wqe->wr.wr_id;
 		wc->status		= wqe->status;
-		wc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].wc_opcode;
+		wc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].sender_wc_opcode;
 		if (rxe_wr_opcode_info[wqe->wr.opcode].mask & WR_IMMDT_MASK)
 			wc->wc_flags = IB_WC_WITH_IMM;
 		wc->byte_len		= wqe->dma.length;
@@ -366,7 +366,7 @@ static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 
 		uwc->wr_id		= wqe->wr.wr_id;
 		uwc->status		= wqe->status;
-		uwc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].wc_opcode;
+		uwc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].sender_wc_opcode;
 		if (rxe_wr_opcode_info[wqe->wr.opcode].mask & WR_IMMDT_MASK)
 			uwc->wc_flags = IB_WC_WITH_IMM;
 		uwc->byte_len		= wqe->dma.length;

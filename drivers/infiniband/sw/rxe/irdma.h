@@ -74,6 +74,7 @@ enum rxe_wr_mask {
     WR_INV_MASK = BIT(6),
 	WR_REG_MASK = BIT(7),
     WR_SOLICITED_MASK = BIT(8),
+    WR_COMP_MASK = BIT(9),
 };
 
 #define WR_MAX_QPT		(8)
@@ -89,7 +90,8 @@ struct rxe_wr_opcode_info {
 	char			    *name;
 	enum rxe_wr_mask	mask;
     bool                qpts[WR_MAX_QPT];  // which qpts this wr_opcode supports
-    enum ib_wc_opcode   wc_opcode;
+    enum ib_wc_opcode   sender_wc_opcode;
+    enum ib_wc_opcode   receiver_wc_opcode;
     bool                is_series;
     union {
       unsigned opcode_num;  // valid for is_series==FALSE
@@ -206,8 +208,14 @@ typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_st
 //   flag still won't get set in the bth header of any of your packets.
 //   One corollary of the above discussion is that if immdt==TRUE, alwaysEnableSolicited has no
 //     effect (it effectively defaults to TRUE, kinda).
-// wc_opcode : the wc_opcode associated with this wr_opcode
-//   that is, the opcode to place in the CQE for this wr
+// sender_wc_opcode : the wc_opcode to place in the 'cqe' for the *sender's* cq upon successful
+//   operation completion and ack
+// postComplete : whether a 'cqe' should be posted to the *receiver's* cq upon successful operation
+//   completion
+//   If immdt==TRUE, postComplete must be TRUE.
+//   Provisionally, also if invalidate==TRUE, postComplete must be TRUE.  I'm not sure if this
+//     restriction is strictly necessary, but the existing code does obey it.
+// receiver_wc_opcode : if postComplete==TRUE, the wc_opcode to place in the aforementioned 'cqe'
 // ack_opcode_num : the opcode_num of the 'ack' expected in response to this wr_opcode
 //   (previously registered either with register_single_ack_opcode or register_ack_opcode_series)
 //   if we expect an opcode series rather than a single opcode, supply the *start* opcode
@@ -220,6 +228,7 @@ typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_st
 //     - wr_opcode_num is outside allowed range
 //     - ack_opcode_num has not been registered, or was not registered as required above
 //     - the 'name' string is too long
+//     - the combination of arguments passed is invalid
 //   OPCODE_IN_USE if the desired wr_opcode_num is already in use
 register_opcode_status register_wr_opcode(
     unsigned wr_opcode_num,
@@ -232,7 +241,8 @@ register_opcode_status register_wr_opcode(
     bool invalidate,
     bool wr_inline,
     bool alwaysEnableSolicited,
-    enum ib_wc_opcode wc_opcode,
+    enum ib_wc_opcode sender_wc_opcode,
+    bool postComplete, enum ib_wc_opcode receiver_wc_opcode,
     unsigned ack_opcode_num
 );
 
@@ -257,9 +267,6 @@ register_opcode_status register_wr_opcode(
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
 // requiresReceive : whether the operation requires that the receiver has posted a 'receive' WQE
 //   If immdt==TRUE, requiresReceive must be TRUE.
-//   TODO: also if invalidate==TRUE?
-// postComplete : whether a 'cqe' should be posted to the completion queue upon operation completion
-//   If immdt==TRUE, postComplete must be TRUE.
 //   TODO: also if invalidate==TRUE?
 // perms : what permissions the *receiving* qp is required to have on *its* machine.
 //   Should be one of IRDMA_PERM_READ, IRDMA_PERM_WRITE, IRDMA_PERM_ATOMIC, IRDMA_PERM_NONE
@@ -289,7 +296,7 @@ register_opcode_status register_single_req_opcode(
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
-    bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority
+    bool requiresReceive, unsigned char perms, bool sched_priority
 );
 
 enum ynb { YES, NO, BOTH };
@@ -354,13 +361,6 @@ enum ynb { YES, NO, BOTH };
 //     TODO: Unclear if we should handle requiresReceive==FALSE + invalidate similarly?
 //       No examples of that case in the existing opcodes
 //       Provisionally, I'm letting the requiresReceive==FALSE hold even for series carrying invalidates
-//   postComplete : whether a 'cqe' should be posted to the completion queue upon operation completion
-//     The 'cqe' will be posted with the opcodes which end the series (i.e. 'end' and 'only').
-//     If immdt==YES, postComplete must be TRUE.  If immdt==BOTH, the value of this argument applies for
-//     the non-immediate version of the series; the immediate version will implicitly have postComplete==TRUE
-//     TODO: Unclear if we should handle invalidate==YES or invalidate==BOTH similarly?
-//       No examples of postComplete==FALSE + invalidate==YES/BOTH in the existing opcodes
-//       Provisionally, I'm treating invalidate==YES/BOTH like immdt==YES/BOTH for postComplete
 //   perms : see comments on register_single_opcode.  Will apply to all four opcodes.
 //   sched_priority : to my current understanding, setting this to TRUE instructs the
 //     internal scheduler to always handle incoming packets from this series immediately,
@@ -405,7 +405,7 @@ register_opcode_status register_req_opcode_series(
     enum ib_qp_type qpt,
     enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
     enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
-    bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority
+    bool requiresReceive, unsigned char perms, bool sched_priority
 );
 
 // Register an 'ack' opcode. 'ack' opcodes are issued in response to 'request' opcodes,
@@ -419,8 +419,6 @@ register_opcode_status register_req_opcode_series(
 // handle_incoming : a function to be called to handle incoming 'ack' packets of this type
 //   (see also irdma_funcs.h)
 // atomicack : set to TRUE iff the packet is an ack/response to an atomic operation
-// TODO: can we assume values of immdt, invalidate, requiresReceive, postComplete, and sched_priority
-//   or do we need to include arguments here for one or more of them
 // returns:
 //   OPCODE_OK on success
 //   OPCODE_INVALID if opcode_num is outside allowed range or if 'name' is too long
