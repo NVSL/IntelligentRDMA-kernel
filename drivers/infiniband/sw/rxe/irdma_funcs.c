@@ -117,7 +117,7 @@ int send_packet_raw(
     }
     res = get_new_resource(ic);
     memcpy(SKB_TO_PKT(skb), pkt, sizeof(skb->cb));
-    res->type = IRDMA_REQ_ATOMIC;
+    res->type = IRDMA_RES_ATOMIC;
     res->atomic.skb = skb;
     res->first_psn = pkt->psn;
     res->last_psn = pkt->psn;

@@ -121,7 +121,7 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
 	if (!res) {
 		// This is the first time we process that request. Get a resource
         res = get_new_resource(ic);
-		res->type	    	= IRDMA_REQ_READ;
+		res->type	    	= IRDMA_RES_READ;
 		res->read.va		= ic->qp->resp.va;
 		res->read.va_org	= ic->qp->resp.va;
 		res->first_psn		= pkt->psn;

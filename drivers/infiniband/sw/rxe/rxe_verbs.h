@@ -170,8 +170,13 @@ enum rdatm_res_state {
 	rdatm_res_state_replay,
 };
 
+enum IRDMA_RES_TYPE {
+  IRDMA_RES_READ,
+  IRDMA_RES_ATOMIC,
+};
+
 struct resp_res {
-	int			type;
+	enum IRDMA_RES_TYPE type;
 	u32			first_psn;
 	u32			last_psn;
 	u32			cur_psn;
