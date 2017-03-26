@@ -660,12 +660,13 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 			 struct ib_send_wr *ibwr)
 {
     unsigned wr_opcode = ibwr->opcode;
+    struct rxe_wr_opcode_info* wr_info = &rxe_wr_opcode_info[wr_opcode];
 	wr->wr_id = ibwr->wr_id;
 	wr->num_sge = ibwr->num_sge;
 	wr->opcode = wr_opcode;
 	wr->send_flags = ibwr->send_flags;
-    if(rxe_wr_opcode_info[wr_opcode].mask & WR_IMMDT_MASK) wr->ex.imm_data = ibwr->ex.imm_data;
-    if(rxe_wr_opcode_info[wr_opcode].mask & WR_INV_MASK) wr->ex.invalidate_rkey = ibwr->ex.invalidate_rkey;
+    if(wr_info->mask & WR_IMMDT_MASK) wr->ex.imm_data = ibwr->ex.imm_data;
+    if(wr_info->mask & WR_INV_MASK) wr->ex.invalidate_rkey = ibwr->ex.invalidate_rkey;
 
 	if (qp_type(qp) == IB_QPT_UD ||
 	    qp_type(qp) == IB_QPT_SMI ||
@@ -674,14 +675,14 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 		wr->wr.ud.remote_qkey = ud_wr(ibwr)->remote_qkey;
 		if (qp_type(qp) == IB_QPT_GSI)
           wr->wr.ud.pkey_index = ud_wr(ibwr)->pkey_index;
-	} else if(rxe_wr_opcode_info[wr_opcode].mask & WR_READ_MASK
-              || rxe_wr_opcode_info[wr_opcode].mask & WR_WRITE_MASK) {
+	} else if(wr_info->mask & WR_READ_MASK
+              || wr_info->mask & WR_WRITE_MASK) {
         // more to the point, "if any packet in series has RXE_RETH_MASK"
         wr->wr.rdma.remote_addr = rdma_wr(ibwr)->remote_addr;
         wr->wr.rdma.rkey	= rdma_wr(ibwr)->rkey;
-    } else if(rxe_wr_opcode_info[wr_opcode].mask & WR_SEND_MASK) {
+    } else if(wr_info->mask & WR_SEND_MASK) {
         // do nothing
-    } else if(rxe_wr_opcode_info[wr_opcode].mask & WR_ATOMIC_MASK) {
+    } else if(wr_info->mask & WR_ATOMIC_MASK) {
         // more to the point, "if any packet in series has RXE_ATMETH_MASK"
         wr->wr.atomic.remote_addr =
             atomic_wr(ibwr)->remote_addr;
@@ -689,9 +690,9 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
             atomic_wr(ibwr)->compare_add;
         wr->wr.atomic.swap = atomic_wr(ibwr)->swap;
         wr->wr.atomic.rkey = atomic_wr(ibwr)->rkey;
-    } else if(rxe_wr_opcode_info[wr_opcode].mask & WR_REG_MASK) {
+    } else if(wr_info->type == LOCAL) {
         // existing code did this only for IB_WR_REG_MR,
-        // but there's no harm doing it for all WR_REG_MASK requests
+        // but there's no harm doing it for all local wr's
         // (as far as I can tell)
         wr->wr.reg.mr = reg_wr(ibwr)->mr;
         wr->wr.reg.key = reg_wr(ibwr)->key;
@@ -730,7 +731,7 @@ static int init_send_wqe(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 
 			p += sge->length;
 		}
-	} else if (mask & WR_REG_MASK) {
+	} else if (rxe_wr_opcode_info[wqe->wr.opcode].type == LOCAL) {
 		wqe->mask = mask;
 		wqe->state = wqe_state_posted;
 		return 0;

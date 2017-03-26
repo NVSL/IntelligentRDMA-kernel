@@ -303,6 +303,29 @@ static handle_ack_status handle_incoming_sendorwrite_ack(struct irdma_context* i
 }
 
 // ****************************
+// handle_wr funcs for 'loc' wr_opcodes
+static handle_loc_status handle_wr_reg_mr(struct irdma_context* ic, struct rxe_send_wqe* wqe) {
+  struct rxe_mem *rmr = to_rmr(wqe->wr.wr.reg.mr);
+  rmr->state = RXE_MEM_STATE_VALID;
+  rmr->access = wqe->wr.wr.reg.access;
+  rmr->lkey = wqe->wr.wr.reg.key;
+  rmr->rkey = wqe->wr.wr.reg.key;
+  return LOC_OK;
+
+}
+
+static handle_loc_status handle_wr_local_inv(struct irdma_context* ic, struct rxe_send_wqe* wqe) {
+  struct rxe_dev *rxe = to_rdev(ic->qp->ibqp.device);
+  struct rxe_mem *rmr = rxe_pool_get_index(&rxe->mr_pool, wqe->wr.ex.invalidate_rkey >> 8);
+  if (!rmr) {
+      pr_err("No mr for key %#x\n", wqe->wr.ex.invalidate_rkey);
+      return LOC_ERROR;
+  }
+  rmr->state = RXE_MEM_STATE_FREE;
+  return LOC_OK;
+}
+
+// ****************************
 // register wr_opcodes, ack opcodes, and req opcodes
 register_opcode_status irdma_init_opcodes(void) {
   register_opcode_status st;
@@ -342,7 +365,7 @@ register_opcode_status irdma_init_opcodes(void) {
   ))
 
   // wr_opcodes
-  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_WRITE, "IB_WR_RDMA_WRITE",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_WRITE, "IB_WR_RDMA_WRITE",
         /* compatible qpts  */ qpts, 2,
         /* series         = */ true,
         /* type           = */ WR_WRITE_MASK,
@@ -354,7 +377,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ false,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_WRITE_WITH_IMM, "IB_WR_RDMA_WRITE_WITH_IMM",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_WRITE_WITH_IMM, "IB_WR_RDMA_WRITE_WITH_IMM",
         /* compatible qpts  */ qpts, 2,
         /* series         = */ true,
         /* type           = */ WR_WRITE_MASK,
@@ -366,7 +389,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ true,
         /* receiver_wc_opcode = */ IB_WC_RECV_RDMA_WITH_IMM,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_SEND, "IB_WR_SEND",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_SEND, "IB_WR_SEND",
         /* compatible qpts  */ qpts, 5,
         /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
@@ -378,7 +401,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ true,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_SEND_WITH_IMM, "IB_WR_SEND_WITH_IMM",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_SEND_WITH_IMM, "IB_WR_SEND_WITH_IMM",
         /* compatible qpts  */ qpts, 5,
         /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
@@ -390,7 +413,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ true,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_READ, "IB_WR_RDMA_READ",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_READ, "IB_WR_RDMA_READ",
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_READ_MASK,
@@ -402,7 +425,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ false,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
-  WITH_CHECK(register_wr_opcode(IB_WR_ATOMIC_CMP_AND_SWP, "IB_WR_ATOMIC_CMP_AND_SWP",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_ATOMIC_CMP_AND_SWP, "IB_WR_ATOMIC_CMP_AND_SWP",
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_ATOMIC_MASK,
@@ -414,7 +437,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ false,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_ATOMIC_FETCH_AND_ADD, "IB_WR_ATOMIC_FETCH_AND_ADD",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_ATOMIC_FETCH_AND_ADD, "IB_WR_ATOMIC_FETCH_AND_ADD",
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_ATOMIC_MASK,
@@ -426,8 +449,8 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ false,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, false, 0, false, false, false, false, IB_WC_LSO, false, IB_WC_RECV, 0))  // not supported
-  WITH_CHECK(register_wr_opcode(IB_WR_SEND_WITH_INV, "IB_WR_SEND_WITH_INV",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, false, 0, false, false, false, false, IB_WC_LSO, false, IB_WC_RECV, 0))  // not supported
+  WITH_CHECK(register_std_wr_opcode(IB_WR_SEND_WITH_INV, "IB_WR_SEND_WITH_INV",
         /* compatible qpts  */ qpts, 3,
         /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
@@ -439,7 +462,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ true,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_RDMA_READ_WITH_INV, "IB_WR_RDMA_READ_WITH_INV",
+  WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_READ_WITH_INV, "IB_WR_RDMA_READ_WITH_INV",
         /* compatible qpts  */ qpts, 1,
         /* series         = */ false,
         /* type           = */ WR_READ_MASK,
@@ -451,30 +474,12 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ true,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
-  WITH_CHECK(register_wr_opcode(IB_WR_LOCAL_INV, "IB_WR_LOCAL_INV",
-        /* compatible qpts  */ qpts, 1,
-        /* series         = */ false,
-        /* type           = */ WR_REG_MASK,
-        /* immdt          = */ false,
-        /* invalidate     = */ true,
-        /* wr_inline      = */ false,
-        /* alwaysEnabl... = */ false,
-        /* sender_wc_opcode   = */ IB_WC_LOCAL_INV,
-        /* postComplete       = */ false,
-        /* receiver_wc_opcode = */ IB_WC_RECV,
-        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_REG_MR, "IB_WR_REG_MR",
-        /* compatible qpts  */ qpts, 1,
-        /* series         = */ false,
-        /* type           = */ WR_REG_MASK,
-        /* immdt          = */ false,
-        /* invalidate     = */ false,
-        /* wr_inline      = */ false,
-        /* alwaysEnabl... = */ false,
-        /* sender_wc_opcode   = */ IB_WC_REG_MR,
-        /* postComplete       = */ false,
-        /* receiver_wc_opcode = */ IB_WC_RECV,
-        /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
+  WITH_CHECK(register_loc_wr_opcode(IB_WR_REG_MR, "IB_WR_REG_MR",
+        /* handle_wr      = */ &handle_wr_reg_mr,
+        /* wr_inline      = */ false))
+  WITH_CHECK(register_loc_wr_opcode(IB_WR_LOCAL_INV, "IB_WR_LOCAL_INV",
+        /* handle_wr      = */ &handle_wr_local_inv,
+        /* wr_inline      = */ false))
 
   // 'req' opcodes (note have to do these after wr_opcodes, because we have to
   // reference them against existing wr_opcodes)

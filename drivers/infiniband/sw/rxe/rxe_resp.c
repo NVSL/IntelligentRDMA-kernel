@@ -532,7 +532,7 @@ static enum resp_states do_complete(struct rxe_qp *qp,
 
 	/* fields after status are not required for errors */
 	if (wc->status == IB_WC_SUCCESS) {
-		wc->opcode = rxe_wr_opcode_info[rxe_opcode[pkt->opcode].req.wr_opcode_num].receiver_wc_opcode;
+		wc->opcode = rxe_wr_opcode_info[rxe_opcode[pkt->opcode].req.wr_opcode_num].std.receiver_wc_opcode;
 		wc->vendor_err = 0;
 		wc->byte_len = wqe->dma.length - wqe->dma.resid;
 
@@ -630,7 +630,7 @@ static enum resp_states acknowledge(struct rxe_qp *qp,
 	if (qp->resp.aeth_syndrome != AETH_ACK_UNLIMITED)
 		send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, qp->resp.aeth_syndrome, pkt->psn);
     else if (bth_ack(pkt))
-        send_packet(&ic, rxe_wr_opcode_info[rxe_opcode[pkt->opcode].req.wr_opcode_num].ack_opcode_num,
+        send_packet(&ic, rxe_wr_opcode_info[rxe_opcode[pkt->opcode].req.wr_opcode_num].std.ack_opcode_num,
             NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
 
     return RESPST_CLEANUP;

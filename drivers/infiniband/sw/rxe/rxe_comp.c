@@ -294,7 +294,7 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     // we have a successful (non-NAK) ack
     reset_retry_counters(qp);
 
-    if(rxe_wr_opcode_info[wqe->wr.opcode].ack_opcode_num
+    if(rxe_wr_opcode_info[wqe->wr.opcode].std.ack_opcode_num
         != rxe_opcode[pkt->opcode].series_id) {
       // not from the series we were expecting
       return COMPST_ERROR;
@@ -349,6 +349,8 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
 static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 			  struct rxe_cqe *cqe)
 {
+    struct rxe_wr_opcode_info *wr_info = &rxe_wr_opcode_info[wqe->wr.opcode];
+
 	memset(cqe, 0, sizeof(*cqe));
 
 	if (!qp->is_user) {
@@ -356,8 +358,8 @@ static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 
 		wc->wr_id		= wqe->wr.wr_id;
 		wc->status		= wqe->status;
-		wc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].sender_wc_opcode;
-		if (rxe_wr_opcode_info[wqe->wr.opcode].mask & WR_IMMDT_MASK)
+		wc->opcode		= wr_info->std.sender_wc_opcode;
+		if (wr_info->mask & WR_IMMDT_MASK)
 			wc->wc_flags = IB_WC_WITH_IMM;
 		wc->byte_len		= wqe->dma.length;
 		wc->qp			= &qp->ibqp;
@@ -366,8 +368,8 @@ static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 
 		uwc->wr_id		= wqe->wr.wr_id;
 		uwc->status		= wqe->status;
-		uwc->opcode		= rxe_wr_opcode_info[wqe->wr.opcode].sender_wc_opcode;
-		if (rxe_wr_opcode_info[wqe->wr.opcode].mask & WR_IMMDT_MASK)
+		uwc->opcode		= wr_info->std.sender_wc_opcode;
+		if (wr_info->mask & WR_IMMDT_MASK)
 			uwc->wc_flags = IB_WC_WITH_IMM;
 		uwc->byte_len		= wqe->dma.length;
 		uwc->qp_num		= qp->ibqp.qp_num;

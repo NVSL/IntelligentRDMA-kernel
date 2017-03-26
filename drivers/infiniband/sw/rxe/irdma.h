@@ -36,6 +36,12 @@ typedef enum {
   ACK_ERROR,   // indicates that there was an error
 } handle_ack_status;
 
+// handle_loc_status is the return type of the handle_wr function for a 'loc' wr.
+typedef enum {
+  LOC_OK = 0,  // indicates no error
+  LOC_ERROR,   // indicates that there was an error
+} handle_loc_status;
+
 // an irdma_context (along with info about the received packet) is passed to each handle function
 struct irdma_context {
   struct rxe_qp* qp;
@@ -72,9 +78,8 @@ enum rxe_wr_mask {
 	WR_WRITE_MASK = BIT(4),
     WR_IMMDT_MASK = BIT(5),
     WR_INV_MASK = BIT(6),
-	WR_REG_MASK = BIT(7),
-    WR_SOLICITED_MASK = BIT(8),
-    WR_COMP_MASK = BIT(9),
+    WR_SOLICITED_MASK = BIT(7),
+    WR_COMP_MASK = BIT(8),
 };
 
 #define WR_MAX_QPT		(8)
@@ -86,21 +91,34 @@ struct rxe_opcode_set {
   unsigned only_opcode_num;
 };
 
+enum rxe_wr_type {
+  LOCAL = 0,
+  STANDARD,
+};
+
 struct rxe_wr_opcode_info {
 	char			    *name;
 	enum rxe_wr_mask	mask;
-    bool                qpts[WR_MAX_QPT];  // which qpts this wr_opcode supports
-    enum ib_wc_opcode   sender_wc_opcode;
-    enum ib_wc_opcode   receiver_wc_opcode;
-    bool                is_series;
+    enum rxe_wr_type    type;
     union {
-      unsigned opcode_num;  // valid for is_series==FALSE
-      struct rxe_opcode_set opcode_set; // valid for is_series==TRUE
-        // '0' for opcode_num or for opcode_set.start_opcode_num indicates not yet registered
-        // note that '0' is never valid here; we reserved the opcode value '0' (for this and for NAK)
-        // TODO if someone tries to use not-yet-registered opcode num or set, give suitable error msg
-    } opcodes[WR_MAX_QPT];
-    unsigned            ack_opcode_num;
+      struct {
+        handle_loc_status (*handle_wr)(struct irdma_context*, struct rxe_send_wqe*);
+      } loc;  // valid for type==LOCAL
+      struct {
+        bool                qpts[WR_MAX_QPT];  // which qpts this wr_opcode supports
+        enum ib_wc_opcode   sender_wc_opcode;
+        enum ib_wc_opcode   receiver_wc_opcode;
+        bool                is_series;
+        union {
+          unsigned opcode_num;  // valid for is_series==FALSE
+          struct rxe_opcode_set opcode_set; // valid for is_series==TRUE
+            // '0' for opcode_num or for opcode_set.start_opcode_num indicates not yet registered
+            // note that '0' is never valid here; we reserved the opcode value '0' (for this and for NAK)
+            // TODO if someone tries to use not-yet-registered opcode num or set, give suitable error msg
+        } opcodes[WR_MAX_QPT];
+        unsigned            ack_opcode_num;
+      } std;  // valid for type==STANDARD
+    };
 };
 
 enum rxe_hdr_type {
@@ -182,19 +200,21 @@ extern struct rxe_opcode_info rxe_opcode[IRDMA_MAX_RXE_OPCODES];
 
 typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
 
-// wr_opcode_num : the desired wr_opcode_num (not already in use)
+// Register a 'standard' work request opcode (wr_opcode).  'standard' wr's involve sending and/or
+//   receiving packets.  Compare with 'local' wr_opcodes (register_loc_wr_opcode()).
+// wr_opcode_num : the desired wr_opcode_num (not already in use, either for a 'local' or 'standard' wr)
 // name : a name for the wr_opcode (max 63 characters, cannot be "")
 // qpts : pointer to array of qp types this wr_opcode is compatible with
 // num_qpts : length of the qpts array (number of compatible qp types)
 // series : whether the wr_opcode is associated with a series of opcodes or not
 //   For more information see comments on register_req_opcode_series()
-// type : one of WR_SEND_MASK, WR_WRITE_MASK, WR_READ_MASK, WR_ATOMIC_MASK, or WR_REG_MASK
+// type : one of WR_SEND_MASK, WR_WRITE_MASK, WR_READ_MASK, or WR_ATOMIC_MASK
 //   Better explanation TBD
 // immdt : whether the operation should (in addition to whatever else it does) present an
 //   immediate value to the receiver
 // invalidate : whether the operation should (in addition to whatever else it does) 'invalidate'
 //   a remote memory region.  'immdt' and 'invalidate' cannot both be TRUE.
-// wr_inline : explanation TBD
+// wr_inline : allow (but not require) 'IB_SEND_INLINE' flag with wr's having this wr_opcode
 // alwaysEnableSolicited : the rules for whether to set the 'solicited' flag in the bth are
 //   confusing to me.  First of all, the flag is never set unless the user dynamically specifies
 //   'solicited' as part of the particular wr invocation (which is fine I guess).
@@ -229,7 +249,7 @@ typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_st
 //     - the 'name' string is too long
 //     - the combination of arguments passed is invalid
 //   OPCODE_IN_USE if the desired wr_opcode_num is already in use
-register_opcode_status register_wr_opcode(
+register_opcode_status register_std_wr_opcode(
     unsigned wr_opcode_num,
     char* name,
     enum ib_qp_type* qpts,
@@ -243,6 +263,25 @@ register_opcode_status register_wr_opcode(
     enum ib_wc_opcode sender_wc_opcode,
     bool postComplete, enum ib_wc_opcode receiver_wc_opcode,
     unsigned ack_opcode_num
+);
+
+// Register a 'local' work request opcode (wr_opcode).  'local' wr's do not need to send or 
+//   receive packets, that is, they operate entirely locally.  Compare with 'standard' wr's.
+// wr_opcode_num : the desired wr_opcode_num (not already in use, either for a 'local' or 'standard' wr)
+// name : a name for the wr_opcode (max 63 characters, cannot be "")
+// handle_wr : a function to be called to handle wr's of this type (see also irdma_funcs.h)
+// wr_inline : allow (but not require) 'IB_SEND_INLINE' flag with wr's having this wr_opcode
+// returns:
+//   OPCODE_OK on success
+//   OPCODE_INVALID if:
+//     - wr_opcode_num is outside allowed range
+//     - the 'name' string is too long
+//   OPCODE_IN_USE if the desired wr_opcode_num is already in use
+register_opcode_status register_loc_wr_opcode(
+    unsigned wr_opcode_num,
+    char* name,
+    handle_loc_status (*handle_wr)(struct irdma_context*, struct rxe_send_wqe*),
+    bool wr_inline
 );
 
 // Register a 'request' opcode.  All opcodes except 'ack' opcodes are in this category.
@@ -260,7 +299,7 @@ register_opcode_status register_wr_opcode(
 // handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
 //   (see also irdma_funcs.h)
 // wr_opcode_num : the number of the wr_opcode for this opcode
-//   (previously registered with register_wr_opcode, with series==FALSE)
+//   (previously registered with register_*std*_wr_opcode, with series==FALSE)
 //   Each wr_opcode can only have one req_opcode per qpt; you can't register multiple
 //     (single_)req_opcodes with the same wr_opcode and qpt
 // qpt : which qp type this opcode is to be used on (e.g. IB_QPT_RC, IB_QPT_UD, etc)
@@ -280,6 +319,7 @@ register_opcode_status register_wr_opcode(
 //     - opcode_num is outside allowed range
 //     - wr_opcode_num:
 //        - has not been registered
+//        - was registered with register_loc_wr_opcode
 //        - was registered with series==TRUE
 //        - was not registered as supporting this qpt
 //     - the 'name' string is too long
@@ -318,7 +358,7 @@ enum ynb { YES, NO, BOTH };
 //   handle_incoming: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   handle_duplicate: see comments on register_single_opcode.  Will apply to all four opcodes.
 //   wr_opcode_num: the number of the wr_opcode for these opcodes (will apply to all four opcodes)
-//     (previously registered with register_wr_opcode, with series==TRUE)
+//     (previously registered with register_*std*_wr_opcode, with series==TRUE)
 //     Each wr_opcode can only have one req_opcode_series per qpt; you can't register multiple
 //       req_opcode_series with the same wr_opcode and qpt
 //   qpt: see comments on register_single_opcode.  Will apply to all four opcodes.
@@ -381,6 +421,7 @@ enum ynb { YES, NO, BOTH };
 //     - any of the opcode_nums (the ones that are not ignored per the rules above) are outside allowed range
 //     - any of the (not-ignored) wr_opcode_nums:
 //        - have not been registered
+//        - were registered with register_loc_wr_opcode
 //        - were registered with series==FALSE
 //        - were not registered as supporting this qpt
 //     - the 'basename' string is too long

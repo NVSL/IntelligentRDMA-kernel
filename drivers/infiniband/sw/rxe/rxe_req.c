@@ -198,20 +198,17 @@ static int next_opcode(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
   if(qpt==IB_QPT_SMI || qpt==IB_QPT_GSI) qpt = IB_QPT_UD;
     // for this function, we handle SMI and GSI like UD (returning a UD opcode)
 
-  // We handle WR_REG_MASK wr_opcodes this way for I-have-no-idea-what reason
-  // but the existing code did the equivalent to this
-  if(info.mask & WR_REG_MASK) return wr_opcode;
-
-  if(info.is_series && qp_type(qp)!=IB_QPT_UD) {
+  // we know here that wr_opcode has type==STANDARD
+  if(info.std.is_series && qp_type(qp)!=IB_QPT_UD) {
     // for comments on the UD exception, see comments in irdma.c
-    struct rxe_opcode_set set = info.opcodes[qp_type(qp)].opcode_set;
+    struct rxe_opcode_set set = info.std.opcodes[qp_type(qp)].opcode_set;
     if(set.start_opcode_num == 0) return -EINVAL;  // no opcode_series registered for this wr_opcode and qpt
     if(qp->req.opcode == set.start_opcode_num || qp->req.opcode == set.middle_opcode_num)
       return fits ? set.end_opcode_num : set.middle_opcode_num;
     else
       return fits ? set.only_opcode_num : set.start_opcode_num;
   } else {
-    unsigned opcode_num = info.opcodes[qp_type(qp)].opcode_num;
+    unsigned opcode_num = info.std.opcodes[qp_type(qp)].opcode_num;
     if(opcode_num == 0) return -EINVAL;  // no req_opcode registered for this wr_opcode and qpt
     return opcode_num;
   }
@@ -500,39 +497,28 @@ next_wqe:
 	if (unlikely(!wqe))
 		goto exit;
 
-	if (wqe->mask & WR_REG_MASK) {
-		if (wqe->wr.opcode == IB_WR_LOCAL_INV) {
-			struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-			struct rxe_mem *rmr;
+	if (rxe_wr_opcode_info[wqe->wr.opcode].type == LOCAL) {
+      struct irdma_context ic = { qp };
+      switch(rxe_wr_opcode_info[wqe->wr.opcode].loc.handle_wr(&ic, wqe)) {
+        case LOC_ERROR:
+          wqe->state = wqe_state_error;
+          wqe->status = IB_WC_MW_BIND_ERR;  // the only error code existing code ever
+                                            // sets as result of handling a local wr
+          goto exit;
+          break;
+        case LOC_OK:
+          wqe->state = wqe_state_done;
+          wqe->status = IB_WC_SUCCESS;
+          qp->req.wqe_index = next_index(qp->sq.queue, qp->req.wqe_index);
+          goto next_wqe;
+          break;
+        default:
+          pr_err("Missed a case of handle_loc_status\n");
+          goto exit;
+      }
+    }
 
-			rmr = rxe_pool_get_index(&rxe->mr_pool,
-						 wqe->wr.ex.invalidate_rkey >> 8);
-			if (!rmr) {
-				pr_err("No mr for key %#x\n",
-				       wqe->wr.ex.invalidate_rkey);
-				wqe->state = wqe_state_error;
-				wqe->status = IB_WC_MW_BIND_ERR;
-				goto exit;
-			}
-			rmr->state = RXE_MEM_STATE_FREE;
-			wqe->state = wqe_state_done;
-			wqe->status = IB_WC_SUCCESS;
-		} else if (wqe->wr.opcode == IB_WR_REG_MR) {
-			struct rxe_mem *rmr = to_rmr(wqe->wr.wr.reg.mr);
-
-			rmr->state = RXE_MEM_STATE_VALID;
-			rmr->access = wqe->wr.wr.reg.access;
-			rmr->lkey = wqe->wr.wr.reg.key;
-			rmr->rkey = wqe->wr.wr.reg.key;
-			wqe->state = wqe_state_done;
-			wqe->status = IB_WC_SUCCESS;
-		} else {
-			goto exit;
-		}
-		qp->req.wqe_index = next_index(qp->sq.queue,
-						qp->req.wqe_index);
-		goto next_wqe;
-	}
+    // From here on we know wqe->wr.opcode has type == STANDARD
 
 	if (unlikely(qp_type(qp) == IB_QPT_RC &&
 		     qp->req.psn > (qp->comp.psn + RXE_MAX_UNACKED_PSNS))) {
