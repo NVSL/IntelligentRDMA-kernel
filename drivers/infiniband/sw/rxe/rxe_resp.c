@@ -631,10 +631,17 @@ static enum resp_states acknowledge(struct rxe_qp *qp,
 
 	if (qp->resp.aeth_syndrome != AETH_ACK_UNLIMITED)
 		send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, qp->resp.aeth_syndrome, pkt->psn);
-	else if (pkt->irdma_opnum == IRDMA_REQ_ATOMIC)
-		send_packet(&ic, IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
-	else if (bth_ack(pkt))
-		send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
+    else if (bth_ack(pkt))
+        send_packet(&ic, rxe_wr_opcode_info[rxe_opcode[pkt->opcode].req.wr_opcode_num].ack_opcode_num,
+            NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
+    // Previously the above 3 lines were the below:
+	// else if (pkt->irdma_opnum == IRDMA_REQ_ATOMIC)
+    //   send_packet(&ic, IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
+	// else if (bth_ack(pkt))
+    //   send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
+    // This substitution depends on two things being always true:
+    // pkt->irdma_opnum == IRDMA_REQ_ATOMIC implies bth_ack(pkt) ??? (not sure, but probably?)
+    // pkt->irdma_opnum == IRDMA_REQ_READ is impossible here ??? (confirmed)
 
 	return RESPST_CLEANUP;
 }

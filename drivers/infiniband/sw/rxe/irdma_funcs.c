@@ -67,7 +67,7 @@ int send_packet(
   bth_set_pad(&new_pkt, pad);
   bth_set_se(&new_pkt, 0);
   bth_set_psn(&new_pkt, psn);
-  bth_set_ack(&new_pkt, 0);
+  bth_set_ack(&new_pkt, 0);  // I guess this field means 'requires ack' and not 'is ack' ???
   new_pkt.psn = psn;
 
   if(new_pkt.mask & RXE_AETH_MASK) {
