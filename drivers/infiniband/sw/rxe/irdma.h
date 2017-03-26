@@ -154,7 +154,6 @@ struct rxe_opcode_info {
     bool is_ack;
     union {
       struct {
-        IRDMA_REQ_OPNUM irdma_opnum;
         unsigned wr_opcode_num;
         handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*);
         handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*);

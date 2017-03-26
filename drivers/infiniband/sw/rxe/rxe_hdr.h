@@ -52,7 +52,6 @@ struct rxe_pkt_info {
 	u8			port_num;	/* port pkt received on */
 	u8			opcode;		/* bth opcode of packet */
 	u8			offset;		/* bth offset from pkt->hdr */
-    IRDMA_REQ_OPNUM irdma_opnum;  /* see notes in irdma.h */
 };
 
 /* Macros should be used only for received skb */

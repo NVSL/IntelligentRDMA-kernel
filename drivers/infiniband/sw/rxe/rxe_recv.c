@@ -375,7 +375,6 @@ int rxe_rcv(struct sk_buff *skb)
 	pkt->psn = bth_psn(pkt);
 	pkt->qp = NULL;
 	pkt->mask |= rxe_opcode[pkt->opcode].mask;
-    pkt->irdma_opnum = rxe_opcode[pkt->opcode].req.irdma_opnum;
 
 	if (unlikely(skb->len < header_size(pkt)))
 		goto drop;

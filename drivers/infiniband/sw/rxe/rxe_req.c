@@ -279,7 +279,6 @@ static struct sk_buff *init_req_packet(struct rxe_qp *qp,
 	pkt->qp		= qp;
 	pkt->psn	= qp->req.psn;
 	pkt->mask	= rxe_opcode[opcode].mask;
-    pkt->irdma_opnum = rxe_opcode[opcode].req.irdma_opnum;
 	pkt->paylen	= paylen;
 	pkt->offset	= 0;
 	pkt->wqe	= wqe;
@@ -415,10 +414,15 @@ static void update_wqe_psn(struct rxe_qp *qp,
 		wqe->last_psn = (qp->req.psn + num_pkt - 1) & BTH_PSN_MASK;
 	}
 
-	if (pkt->irdma_opnum == IRDMA_REQ_READ)
-		qp->req.psn = (wqe->first_psn + num_pkt) & BTH_PSN_MASK;
-	else
-		qp->req.psn = (qp->req.psn + 1) & BTH_PSN_MASK;
+    qp->req.psn = (qp->req.psn + 1) & BTH_PSN_MASK;
+    // Specifically for read requests (and no other wqe's),
+    // the above line used to be
+    //   qp->req.psn = (wqe->first_psn + num_pkt) & BTH_PSN_MASK;
+    // However, since in this case:
+    //   (a) payload is always 0 (and I'm pretty sure wqe->dma.resid is also 0)
+    //   (b) pkt->mask & RXE_START_MASK is always true
+    // we know that num_pkt will be 1, and wqe->first_psn == qp->req.psn.
+    // This means that the old line is exactly equivalent to the new one.
 }
 
 static void save_state(struct rxe_send_wqe *wqe,
@@ -465,7 +469,6 @@ int rxe_requester(void *arg)
 	struct sk_buff *skb;
 	struct rxe_send_wqe *wqe;
 	enum rxe_hdr_mask mask;
-    IRDMA_REQ_OPNUM irdma_req_opnum;
 	int payload;
 	int mtu;
 	int opcode;
@@ -551,7 +554,6 @@ next_wqe:
 	}
 
 	mask = rxe_opcode[opcode].mask;
-    irdma_req_opnum = rxe_opcode[opcode].req.irdma_opnum;
 	if (unlikely(mask & IRDMA_RES_MASK)) {
 		if (check_init_depth(qp, wqe))
 			goto exit;

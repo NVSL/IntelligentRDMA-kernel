@@ -197,7 +197,6 @@ static register_opcode_status __register_req_opcode(
   strcpy(rxe_opcode[opcode_num].name, name);
   rxe_opcode[opcode_num].mask = mask;
   rxe_opcode[opcode_num].is_ack = false;
-  rxe_opcode[opcode_num].req.irdma_opnum = irdma_req_opnum;
   rxe_opcode[opcode_num].req.wr_opcode_num = wr_opcode_num;
   rxe_opcode[opcode_num].req.handle_incoming = handle_incoming;
   rxe_opcode[opcode_num].req.handle_duplicate = handle_duplicate;
