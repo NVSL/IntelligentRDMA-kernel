@@ -349,6 +349,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ false,
         /* wr_inline      = */ true,
+        /* alwaysEnabl... = */ false,
         /* wc_opcode      = */ IB_WC_RDMA_WRITE,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_wr_opcode(IB_WR_RDMA_WRITE_WITH_IMM, "IB_WR_RDMA_WRITE_WITH_IMM",
@@ -358,6 +359,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ true,
         /* invalidate     = */ false,
         /* wr_inline      = */ true,
+        /* alwaysEnabl... = */ false,  // or true, doesn't matter
         /* wc_opcode      = */ IB_WC_RDMA_WRITE,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_wr_opcode(IB_WR_SEND, "IB_WR_SEND",
@@ -367,6 +369,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ false,
         /* wr_inline      = */ true,
+        /* alwaysEnabl... = */ true,
         /* wc_opcode      = */ IB_WC_SEND,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_wr_opcode(IB_WR_SEND_WITH_IMM, "IB_WR_SEND_WITH_IMM",
@@ -376,6 +379,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ true,
         /* invalidate     = */ false,
         /* wr_inline      = */ true,
+        /* alwaysEnabl... = */ true,  // or false, doesn't matter
         /* wc_opcode      = */ IB_WC_SEND,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_wr_opcode(IB_WR_RDMA_READ, "IB_WR_RDMA_READ",
@@ -385,6 +389,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ false,
         /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
         /* wc_opcode      = */ IB_WC_RDMA_READ,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
   WITH_CHECK(register_wr_opcode(IB_WR_ATOMIC_CMP_AND_SWP, "IB_WR_ATOMIC_CMP_AND_SWP",
@@ -394,6 +399,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ false,
         /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
         /* wc_opcode      = */ IB_WC_COMP_SWAP,
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
   WITH_CHECK(register_wr_opcode(IB_WR_ATOMIC_FETCH_AND_ADD, "IB_WR_ATOMIC_FETCH_AND_ADD",
@@ -403,9 +409,10 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ false,
         /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
         /* wc_opcode      = */ IB_WC_FETCH_ADD,
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
-  WITH_CHECK(register_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, false, 0, false, false, false, IB_WC_LSO, 0))  // not supported
+  WITH_CHECK(register_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, false, 0, false, false, false, false, IB_WC_LSO, 0))  // not supported
   WITH_CHECK(register_wr_opcode(IB_WR_SEND_WITH_INV, "IB_WR_SEND_WITH_INV",
         /* compatible qpts  */ qpts, 3,
         /* series         = */ true,
@@ -413,6 +420,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ true,
         /* wr_inline      = */ true,
+        /* alwaysEnabl... = */ true,
         /* wc_opcode      = */ IB_WC_SEND,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_wr_opcode(IB_WR_RDMA_READ_WITH_INV, "IB_WR_RDMA_READ_WITH_INV",
@@ -422,6 +430,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ true,
         /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
         /* wc_opcode      = */ IB_WC_RDMA_READ,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
   WITH_CHECK(register_wr_opcode(IB_WR_LOCAL_INV, "IB_WR_LOCAL_INV",
@@ -431,6 +440,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ true,
         /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
         /* wc_opcode      = */ IB_WC_LOCAL_INV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_wr_opcode(IB_WR_REG_MR, "IB_WR_REG_MR",
@@ -440,6 +450,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* immdt          = */ false,
         /* invalidate     = */ false,
         /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
         /* wc_opcode      = */ IB_WC_REG_MR,
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
 

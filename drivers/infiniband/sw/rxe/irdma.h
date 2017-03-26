@@ -73,6 +73,7 @@ enum rxe_wr_mask {
     WR_IMMDT_MASK = BIT(5),
     WR_INV_MASK = BIT(6),
 	WR_REG_MASK = BIT(7),
+    WR_SOLICITED_MASK = BIT(8),
 };
 
 #define WR_MAX_QPT		(8)
@@ -140,6 +141,7 @@ enum rxe_hdr_mask {
 
     IRDMA_SCHED_PRIORITY_MASK = BIT(NUM_HDR_TYPES + 6),
     IRDMA_RES_MASK      = BIT(NUM_HDR_TYPES + 7),
+    IRDMA_PAYLOAD_MASK  = BIT(NUM_HDR_TYPES + 8),
 };
 
 #define OPCODE_NONE		(-1)
@@ -192,6 +194,18 @@ typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_st
 // invalidate : whether the operation should (in addition to whatever else it does) 'invalidate'
 //   a remote memory region.  'immdt' and 'invalidate' cannot both be TRUE.
 // wr_inline : explanation TBD
+// alwaysEnableSolicited : the rules for whether to set the 'solicited' flag in the bth are
+//   confusing to me.  First of all, the flag is never set unless the user dynamically specifies
+//   'solicited' as part of the particular wr invocation (which is fine I guess).
+//   Second of all, the flag is only set for the last packet associated with that particular wr
+//   (which is also certainly fine).  But third of all, even if the first two conditions are met,
+//   the flag is not set except for wr's with immdt==TRUE or with alwaysEnableSolicited==TRUE,
+//   even overriding the user's expressed preference (dynamic 'solicited' flag).
+//   In existing code, the 'RDMA Send' wr's have this set, but no others, so if you specify
+//   solicited with your invocation of RDMA Read, or RDMA Write without immediate, the 'solicited'
+//   flag still won't get set in the bth header of any of your packets.
+//   One corollary of the above discussion is that if immdt==TRUE, alwaysEnableSolicited has no
+//     effect (it effectively defaults to TRUE, kinda).
 // wc_opcode : the wc_opcode associated with this wr_opcode
 //   that is, the opcode to place in the CQE for this wr
 // ack_opcode_num : the opcode_num of the 'ack' expected in response to this wr_opcode
@@ -217,6 +231,7 @@ register_opcode_status register_wr_opcode(
     bool immdt,
     bool invalidate,
     bool wr_inline,
+    bool alwaysEnableSolicited,
     enum ib_wc_opcode wc_opcode,
     unsigned ack_opcode_num
 );

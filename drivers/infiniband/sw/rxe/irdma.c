@@ -25,6 +25,7 @@ register_opcode_status register_wr_opcode(
     bool immdt,
     bool invalidate,
     bool wr_inline,
+    bool alwaysEnableSolicited,
     enum ib_wc_opcode wc_opcode,
     unsigned ack_opcode_num
 ) {
@@ -58,6 +59,7 @@ register_opcode_status register_wr_opcode(
       (wr_inline ? WR_INLINE_MASK : 0)
     | (immdt ? WR_IMMDT_MASK : 0)
     | (invalidate ? WR_INV_MASK : 0)
+    | (alwaysEnableSolicited ? WR_SOLICITED_MASK : 0)
     | type;
   for(i = 0; i < WR_MAX_QPT; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[i] = false;
   for(i = 0; i < num_qpts; i++) rxe_wr_opcode_info[wr_opcode_num].qpts[qpts[i]] = true;
@@ -150,9 +152,6 @@ static register_opcode_status __register_req_opcode(
     | SET_IF(false, RXE_LOOPBACK_MASK)
         // These mask bits must (currently) be indicated by the user; more explanation in irdma.h
     | SET_IF(immdt, RXE_IMMDT_MASK)
-    // | SET_IF(payload, RXE_PAYLOAD_MASK)  // appears to never be used for anything in existing code
-        // RXE_PAYLOAD_MASK was set for all opcodes in a series, plus the UD_SEND_ONLY opcodes,
-        // and not for any other opcodes.
     | SET_IF(invalidate, RXE_IETH_MASK)
     | SET_IF(requiresReceive, RXE_RWR_MASK)
     | SET_IF(postComplete, RXE_COMP_MASK)
@@ -180,6 +179,11 @@ static register_opcode_status __register_req_opcode(
         // RXE_DETH_MASK indicates whether the packet needs a 'datagram extended transport header'.
         // The rule here reflects existing convention.
     | SET_IF((false /*qpt == IB_QPT_RD*/ || qpt == IB_QPT_UD), RXE_DETH_MASK)
+        // RXE_PAYLOAD_MASK was originally set for all writes/sends + read responses.
+        // However, it wasn't used for anything in the original code.
+        // So I renamed it IRDMA_PAYLOAD_MASK and decided it should only apply to 'req' opcodes
+        // (unless I find a good reason to make it also apply to read responses again)
+    | SET_IF(irdma_req_opnum == IRDMA_REQ_SEND || irdma_req_opnum == IRDMA_REQ_WRITE, IRDMA_PAYLOAD_MASK)
         // I invented IRDMA_RES_MASK to indicate which packets need "responder resources" available
         // on the receive side.  The rule here reflects existing convention.
     | SET_IF(irdma_req_opnum == IRDMA_REQ_READ || irdma_req_opnum == IRDMA_REQ_ATOMIC, IRDMA_RES_MASK)
