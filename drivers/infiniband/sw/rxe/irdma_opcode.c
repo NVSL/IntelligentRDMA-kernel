@@ -368,7 +368,6 @@ register_opcode_status irdma_init_opcodes(void) {
   // wr_opcodes
   WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_WRITE, "IB_WR_RDMA_WRITE",
         /* compatible qpts  */ qpts, 2,
-        /* series         = */ true,
         /* type           = */ WR_WRITE_MASK,
         /* immdt          = */ false,
         /* invalidate     = */ false,
@@ -380,7 +379,6 @@ register_opcode_status irdma_init_opcodes(void) {
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_WRITE_WITH_IMM, "IB_WR_RDMA_WRITE_WITH_IMM",
         /* compatible qpts  */ qpts, 2,
-        /* series         = */ true,
         /* type           = */ WR_WRITE_MASK,
         /* immdt          = */ true,
         /* invalidate     = */ false,
@@ -392,7 +390,6 @@ register_opcode_status irdma_init_opcodes(void) {
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_std_wr_opcode(IB_WR_SEND, "IB_WR_SEND",
         /* compatible qpts  */ qpts, 5,
-        /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
         /* immdt          = */ false,
         /* invalidate     = */ false,
@@ -404,7 +401,6 @@ register_opcode_status irdma_init_opcodes(void) {
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_std_wr_opcode(IB_WR_SEND_WITH_IMM, "IB_WR_SEND_WITH_IMM",
         /* compatible qpts  */ qpts, 5,
-        /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
         /* immdt          = */ true,
         /* invalidate     = */ false,
@@ -416,7 +412,6 @@ register_opcode_status irdma_init_opcodes(void) {
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_READ, "IB_WR_RDMA_READ",
         /* compatible qpts  */ qpts, 1,
-        /* series         = */ false,
         /* type           = */ WR_READ_MASK,
         /* immdt          = */ false,
         /* invalidate     = */ false,
@@ -428,7 +423,6 @@ register_opcode_status irdma_init_opcodes(void) {
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
   WITH_CHECK(register_std_wr_opcode(IB_WR_ATOMIC_CMP_AND_SWP, "IB_WR_ATOMIC_CMP_AND_SWP",
         /* compatible qpts  */ qpts, 1,
-        /* series         = */ false,
         /* type           = */ WR_ATOMIC_MASK,
         /* immdt          = */ false,
         /* invalidate     = */ false,
@@ -440,7 +434,6 @@ register_opcode_status irdma_init_opcodes(void) {
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
   WITH_CHECK(register_std_wr_opcode(IB_WR_ATOMIC_FETCH_AND_ADD, "IB_WR_ATOMIC_FETCH_AND_ADD",
         /* compatible qpts  */ qpts, 1,
-        /* series         = */ false,
         /* type           = */ WR_ATOMIC_MASK,
         /* immdt          = */ false,
         /* invalidate     = */ false,
@@ -450,10 +443,9 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ false,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE))
-  WITH_CHECK(register_std_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, false, 0, false, false, false, false, IB_WC_LSO, false, IB_WC_RECV, 0))  // not supported
+  WITH_CHECK(register_std_wr_opcode(IB_WR_LSO, "IB_WR_LSO", NULL, 0, 0, false, false, false, false, IB_WC_LSO, false, IB_WC_RECV, 0))  // not supported
   WITH_CHECK(register_std_wr_opcode(IB_WR_SEND_WITH_INV, "IB_WR_SEND_WITH_INV",
         /* compatible qpts  */ qpts, 3,
-        /* series         = */ true,
         /* type           = */ WR_SEND_MASK,
         /* immdt          = */ false,
         /* invalidate     = */ true,
@@ -465,7 +457,6 @@ register_opcode_status irdma_init_opcodes(void) {
         /* ack_opcode_num = */ IB_OPCODE_RC_ACKNOWLEDGE))
   WITH_CHECK(register_std_wr_opcode(IB_WR_RDMA_READ_WITH_INV, "IB_WR_RDMA_READ_WITH_INV",
         /* compatible qpts  */ qpts, 1,
-        /* series         = */ false,
         /* type           = */ WR_READ_MASK,
         /* immdt          = */ false,
         /* invalidate     = */ true,

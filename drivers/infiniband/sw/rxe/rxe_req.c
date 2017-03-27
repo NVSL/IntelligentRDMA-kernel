@@ -199,17 +199,18 @@ static int next_opcode(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
     // for this function, we handle SMI and GSI like UD (returning a UD opcode)
 
   // we know here that wr_opcode has type==STANDARD
-  if(info.std.is_series && qp_type(qp)!=IB_QPT_UD) {
-    // for comments on the UD exception, see comments in irdma.c
-    struct rxe_opcode_set set = info.std.opcodes[qp_type(qp)].opcode_set;
-    if(set.start_opcode_num == 0) return -EINVAL;  // no opcode_series registered for this wr_opcode and qpt
+  if(!is_registered(&info.std.opcode_groups[qpt])) {
+    // no opcode_series registered for this wr_opcode and qpt
+    return -EINVAL;
+  }
+  if(info.std.opcode_groups[qpt].is_series) {
+    struct rxe_opcode_set set = info.std.opcode_groups[qpt].opcode_set;
     if(qp->req.opcode == set.start_opcode_num || qp->req.opcode == set.middle_opcode_num)
       return fits ? set.end_opcode_num : set.middle_opcode_num;
     else
       return fits ? set.only_opcode_num : set.start_opcode_num;
   } else {
-    unsigned opcode_num = info.std.opcodes[qp_type(qp)].opcode_num;
-    if(opcode_num == 0) return -EINVAL;  // no req_opcode registered for this wr_opcode and qpt
+    unsigned opcode_num = info.std.opcode_groups[qpt].opcode_num;
     return opcode_num;
   }
 }

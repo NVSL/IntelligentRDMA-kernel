@@ -222,8 +222,8 @@ static enum resp_states check_op_seq(struct rxe_qp *qp,
             return RESPST_ERR_MISSING_OPCODE_LAST_D1E;
         }
       }
-      resp_series_id = rxe_opcode[qp->resp.opcode].series_id;
-      this_series_id = rxe_opcode[pkt->opcode].series_id;
+      resp_series_id = series_id(&rxe_opcode[qp->resp.opcode].containingGroup);
+      this_series_id = series_id(&rxe_opcode[pkt->opcode].containingGroup);
       if(resp_series_id != this_series_id) {
         // Can't switch series
         switch(qp_type(qp)) {

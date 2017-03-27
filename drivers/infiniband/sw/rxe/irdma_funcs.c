@@ -112,7 +112,9 @@ int send_ack_packet(
     u32 psn
 ) {
   struct rxe_wr_opcode_info* wr_info = &rxe_wr_opcode_info[rxe_opcode[req_pkt->opcode].req.wr_opcode_num];
-  unsigned ack_opcode_num = wr_info->std.ack_opcode_num;
+  struct rxe_opcode_group ack_opcode_group = wr_info->std.ack_opcode_group;
+  unsigned ack_opcode_num = ack_opcode_group.opcode_num;
+    // send_ack_packet only called with single ack_opcodes, not series (for now)
   if((syndrome & AETH_TYPE_MASK) != AETH_ACK) {
     pr_err("Can't send ack packet with NAK syndrome 0x%x\n", syndrome);
     return -1;  // what should the error code be here?

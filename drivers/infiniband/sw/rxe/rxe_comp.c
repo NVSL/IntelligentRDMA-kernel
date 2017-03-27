@@ -210,6 +210,7 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
 	unsigned int mask = pkt->mask;
 	u8 syn;
     struct irdma_context ic = { qp };
+    unsigned prev_series_id, this_series_id;
 
 	/* Check the sequence only */
 	if(qp->comp.opcode == -1) {
@@ -219,7 +220,9 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     } else {
       // In the middle of an operation
       if (mask & RXE_START_MASK) return COMPST_ERROR;  // can't start new operation
-      if(rxe_opcode[pkt->opcode].series_id != rxe_opcode[qp->comp.opcode].series_id) {
+      prev_series_id = series_id(&rxe_opcode[qp->comp.opcode].containingGroup);
+      this_series_id = series_id(&rxe_opcode[pkt->opcode].containingGroup);
+      if(prev_series_id != this_series_id) {
         // opcodes are not from the same series
         return COMPST_ERROR;
       }
@@ -294,8 +297,8 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     // we have a successful (non-NAK) ack
     reset_retry_counters(qp);
 
-    if(rxe_wr_opcode_info[wqe->wr.opcode].std.ack_opcode_num
-        != rxe_opcode[pkt->opcode].series_id) {
+    if(series_id(&rxe_wr_opcode_info[wqe->wr.opcode].std.ack_opcode_group)
+        != series_id(&rxe_opcode[pkt->opcode].containingGroup)) {
       // not from the series we were expecting
       return COMPST_ERROR;
       // Note: existing code did not perform this check if
