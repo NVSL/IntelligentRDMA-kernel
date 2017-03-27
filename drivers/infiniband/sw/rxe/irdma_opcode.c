@@ -93,77 +93,17 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
 }
 
 static handle_incoming_status handle_incoming_read(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
-	int mtu = ic->qp->mtu;
     struct irdma_mem payload;
-	int opcode;
-	struct resp_res *res = ic->qp->resp.res;
+    // payload inherits the reference to mr from qp
+    payload.mr = ic->qp->resp.mr;
+    ic->qp->resp.mr = NULL;
+    payload.va = ic->qp->resp.va;
+    payload.length = ic->qp->resp.resid;
 
-    /* For RDMA Read we can increment the msn now. See C9-148. */
-    ic->qp->resp.msn++;
+    // this function inherits the reference to mr, so payload no longer has it
+    if(send_ack_packet_or_series(ic, &payload, pkt, AETH_ACK_UNLIMITED, pkt->psn)) return INCOMING_ERROR_RNR;
 
-    // If res is not NULL, then we have a current RDMA request being processed or replayed.
-	if (!res) {
-		// This is the first time we process that request. Get a resource
-        res = get_new_resource(ic);
-		res->type	    	= IRDMA_RES_READ;
-		res->read.va		= ic->qp->resp.va;
-		res->read.va_org	= ic->qp->resp.va;
-		res->first_psn		= pkt->psn;
-		if (reth_len(pkt)) {
-			res->last_psn	= (pkt->psn +
-					   (reth_len(pkt) + mtu - 1) /
-					   mtu - 1) & BTH_PSN_MASK;
-		} else {
-			res->last_psn	= res->first_psn;
-		}
-		res->cur_psn		= pkt->psn;
-		res->read.resid		= ic->qp->resp.resid;
-		res->read.length	= ic->qp->resp.resid;
-		res->read.rkey		= ic->qp->resp.rkey;
-
-		/* note res inherits the reference to mr from qp */
-		res->read.mr		= ic->qp->resp.mr;
-		ic->qp->resp.mr		= NULL;
-
-		ic->qp->resp.res		= res;
-		res->state		= rdatm_res_state_new;
-	}
-
-	if (res->state == rdatm_res_state_new) {
-		if (res->read.resid <= mtu)
-			opcode = IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY;
-		else
-			opcode = IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST;
-	} else {
-		if (res->read.resid > mtu)
-			opcode = IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE;
-		else
-			opcode = IB_OPCODE_RC_RDMA_READ_RESPONSE_LAST;
-	}
-
-	res->state = rdatm_res_state_next;
-
-    payload.mr = res->read.mr;
-    payload.va = res->read.va;
-	payload.length = min_t(int, res->read.resid, mtu);
-
-    // cheating to access this private function, will fix in subsequent commit
-    if(__send_packet_with_opcode(ic->qp, &payload, pkt, AETH_ACK_UNLIMITED, res->cur_psn, opcode)) return INCOMING_ERROR_RNR;
-
-	res->read.va += payload.length;
-	res->read.resid -= payload.length;
-	res->cur_psn = (res->cur_psn + 1) & BTH_PSN_MASK;
-
-	if (res->read.resid > 0) {
-		return INCOMING_DONE;
-	} else {
-		ic->qp->resp.res = NULL;
-		ic->qp->resp.opcode = -1;
-		if (psn_compare(res->cur_psn, ic->qp->resp.psn) >= 0)
-			ic->qp->resp.psn = res->cur_psn;
-		__cleanup(ic->qp, pkt);
-        return INCOMING_DONE;
-	}
+    return INCOMING_OK;
 }
 
 static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
@@ -206,7 +146,7 @@ static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, s
 // handle_duplicate funcs for 'req' opcodes
 static handle_duplicate_status handle_duplicate_sendorwrite(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
   // Ack again and cleanup. C9-105.
-  if(bth_ack(pkt)) send_ack_packet(ic, NULL, pkt, AETH_ACK_UNLIMITED, (ic->qp->resp.psn-1) & BTH_PSN_MASK);
+  if(bth_ack(pkt)) send_ack_packet_or_series(ic, NULL, pkt, AETH_ACK_UNLIMITED, (ic->qp->resp.psn-1) & BTH_PSN_MASK);
   return HANDLED;
 }
 

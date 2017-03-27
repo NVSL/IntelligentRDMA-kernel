@@ -34,4 +34,6 @@ int __send_packet_raw(
     bool atomicack
 );
 
+int __continue_sending_ack_series(struct rxe_qp* qp, struct rxe_pkt_info* req_pkt);
+
 #endif

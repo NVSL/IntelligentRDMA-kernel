@@ -193,6 +193,7 @@ struct resp_res {
 			u32		length;
 			u64		va;
 			u32		resid;
+            u8      aeth_syndrome;
 		} read;
 	};
 };

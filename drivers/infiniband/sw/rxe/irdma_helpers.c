@@ -148,3 +148,47 @@ int __send_packet_raw(
   return err;
 }
 
+int __continue_sending_ack_series(struct rxe_qp* qp, struct rxe_pkt_info* req_pkt) {
+    int mtu = qp->mtu;
+    struct irdma_mem payload;
+    struct resp_res *res = qp->resp.res;
+    struct rxe_wr_opcode_info* wr_info = &rxe_wr_opcode_info[rxe_opcode[req_pkt->opcode].req.wr_opcode_num];
+    struct rxe_opcode_group ack_opcode_group = wr_info->std.ack_opcode_group;
+    int opcode;
+    int err;
+
+	if (res->state == rdatm_res_state_new) {
+		if (res->read.resid <= mtu)
+			opcode = ack_opcode_group.opcode_set.only_opcode_num;
+		else
+			opcode = ack_opcode_group.opcode_set.start_opcode_num;
+	} else {
+		if (res->read.resid > mtu)
+			opcode = ack_opcode_group.opcode_set.middle_opcode_num;
+		else
+			opcode = ack_opcode_group.opcode_set.end_opcode_num;
+	}
+
+	res->state = rdatm_res_state_next;
+
+    payload.mr = res->read.mr;
+    payload.va = res->read.va;
+	payload.length = min_t(int, res->read.resid, mtu);
+    err = __send_packet_with_opcode(qp, &payload, req_pkt, res->read.aeth_syndrome, res->cur_psn, opcode);
+    if(err) return err;
+
+	res->read.va += payload.length;
+	res->read.resid -= payload.length;
+	res->cur_psn = (res->cur_psn + 1) & BTH_PSN_MASK;
+	if (res->read.resid > 0) {
+		return 0;
+	} else {
+		qp->resp.res = NULL;
+		qp->resp.opcode = -1;
+		if (psn_compare(res->cur_psn, qp->resp.psn) >= 0)
+			qp->resp.psn = res->cur_psn;
+		__cleanup(qp, req_pkt);
+        return 0;
+	}
+}
+

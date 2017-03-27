@@ -16,16 +16,14 @@ struct irdma_mem {
   u32 length;  // length in bytes
 };
 
-// Gets a new 'resource'
-struct resp_res* get_new_resource(struct irdma_context* ic);
 // Gets an existing 'resource' by psn, or NULL if not found
 struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn);
 
-// Sends an 'ack' packet in response to received 'req' packet
-// payload : payload for the packet, can be NULL for no payload
+// Sends an 'ack' packet or series in response to received 'req' packet
+// payload : payload for the packet or series, can be NULL for no payload
 // req_pkt : the 'req' packet you're responding to (the one passed to your handle_func)
 // syndrome, psn : descriptions TBD
-int send_ack_packet(
+int send_ack_packet_or_series(
     struct irdma_context* ic,
     struct irdma_mem* payload,
     struct rxe_pkt_info* req_pkt,

@@ -16,18 +16,12 @@ typedef enum {
   INCOMING_ERROR_RKEY_VIOLATION,  // explanation TBD, but name seems straightforward
   INCOMING_ERROR_RNR,  // 'receiver not ready' - indicates that a required receive request was not posted
   INCOMING_ERROR_HANDLED,  // indicates that there was an error, but it has already been handled
-  INCOMING_DONE,  // indicates we are completely done handling the packet, with no error.
-                  // Note that INCOMING_OK should usually be used instead -
-                  // with INCOMING_OK, a bunch of bookkeeping is done to
-                  // complete the processing of this packet and prepare for the next.
-                  // INCOMING_DONE indicates that you've already done all this yourself.
 } handle_incoming_status;
 
 // handle_duplicate_status is the return type of the handle_duplicate function for a 'req' opcode.
 typedef enum {
   HANDLED,    // duplicate packet has been handled, we're done
-  REPROCESS,  // please now reprocess the duplicate packet (with handle_incoming) and proceed from
-              //   there based on the return code from handle_incoming, as normal
+  REPROCESS,  // this code only for use in conjunction with ack series sending; better explanation TBD
 } handle_duplicate_status;
 
 // handle_ack_status is the return type of the handle_incoming function for an 'ack' opcode.

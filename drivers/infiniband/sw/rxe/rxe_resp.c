@@ -137,23 +137,11 @@ static inline enum resp_states get_req(struct rxe_qp *qp,
 	*pkt_p = SKB_TO_PKT(skb);
 
 	if(qp->resp.res) {
+        // series send in progress
 		struct rxe_pkt_info* pkt = *pkt_p;
-		struct irdma_context ic = { qp };
-		handle_incoming_status hs = rxe_opcode[pkt->opcode].req.handle_incoming(&ic, pkt);
-        switch(hs) {
-          case INCOMING_ERROR_LENGTH: return RESPST_ERR_LENGTH;
-          case INCOMING_ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
-          case INCOMING_ERROR_RNR: return RESPST_ERR_RNR;
-          case INCOMING_ERROR_HANDLED: return RESPST_COMPLETE;
-          case INCOMING_DONE: return RESPST_DONE;
-          case INCOMING_OK:
-            // In the existing code, this handle_incoming call is only ever
-            // handle_incoming_read, and that handler should never return INCOMING_OK
-            pr_warn("rxe_resp: Not sure what to do here\n");
-            break;
-          default: /* Unreachable */ WARN_ON(1);
-        }
-	}
+        if(__continue_sending_ack_series(qp, pkt)) return RESPST_ERR_RNR;
+        return RESPST_DONE;
+    }
 
 	return RESPST_CHK_PSN;
 }
@@ -488,13 +476,14 @@ static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
       case INCOMING_ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
       case INCOMING_ERROR_RNR: return RESPST_ERR_RNR;
       case INCOMING_ERROR_HANDLED: return RESPST_COMPLETE;
-      case INCOMING_DONE: return RESPST_DONE;
       case INCOMING_OK: break;
       default: /* Unreachable */ WARN_ON(1);
     }
 
 	/* We successfully processed this new request. */
 	qp->resp.msn++;
+
+    if(qp->resp.res) return RESPST_DONE;
 
 	/* next expected psn, read handles this separately */
 	qp->resp.psn = (pkt->psn + 1) & BTH_PSN_MASK;
@@ -628,11 +617,11 @@ static enum resp_states acknowledge(struct rxe_qp *qp,
       // existing code had one case here, but I split it into two just in
       // case qp->resp.aeth_syndrome could be either an ack or a nak
       if((qp->resp.aeth_syndrome & AETH_TYPE_MASK) == AETH_ACK)
-		send_ack_packet(&ic, NULL, pkt, qp->resp.aeth_syndrome, pkt->psn);
+		send_ack_packet_or_series(&ic, NULL, pkt, qp->resp.aeth_syndrome, pkt->psn);
       else
         send_nak_packet(&ic, pkt, qp->resp.aeth_syndrome, pkt->psn);
     } else if (bth_ack(pkt)) {
-        send_ack_packet(&ic, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
+        send_ack_packet_or_series(&ic, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
     }
 
     return RESPST_CLEANUP;
@@ -647,17 +636,14 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
       case HANDLED:
         return RESPST_CLEANUP;
       case REPROCESS:
-        switch(rxe_opcode[pkt->opcode].req.handle_incoming(&ic, pkt)) {
-          case INCOMING_ERROR_LENGTH: return RESPST_ERR_LENGTH;
-          case INCOMING_ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
-          case INCOMING_ERROR_RNR: return RESPST_ERR_RNR;
-          case INCOMING_ERROR_HANDLED: return RESPST_COMPLETE;
-          case INCOMING_DONE: return RESPST_DONE;
-          case INCOMING_OK:
-            // This never happened in existing code, but I guess just clean up
-            pr_warn("rxe_resp: Not sure what to do here\n");
-            return RESPST_CLEANUP;
-          default: /* Unreachable */ WARN_ON(1); return RESPST_CLEANUP;
+        if(qp->resp.res) {
+          // series send in progress
+          if(__continue_sending_ack_series(qp, pkt)) return RESPST_ERR_RNR;
+          return RESPST_DONE;
+        } else {
+          // This never happened in existing code, but I guess just clean up
+          pr_warn("Not sure what to do with REPROCESS in non-series\n");
+          return RESPST_CLEANUP;
         }
       default:
         pr_warn("Missed a case of handle_duplicate_status\n");
