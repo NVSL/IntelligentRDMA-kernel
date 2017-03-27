@@ -269,7 +269,7 @@ register_opcode_status register_std_wr_opcode(
     unsigned ack_opcode_num
 );
 
-// Register a 'local' work request opcode (wr_opcode).  'local' wr's do not need to send or 
+// Register a 'local' work request opcode (wr_opcode).  'local' wr's do not need to send or
 //   receive packets, that is, they operate entirely locally.  Compare with 'standard' wr's.
 // wr_opcode_num : the desired wr_opcode_num (not already in use, either for a 'local' or 'standard' wr)
 // name : a name for the wr_opcode (max 63 characters, cannot be "")
