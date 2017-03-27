@@ -1,6 +1,7 @@
 #include "irdma_opcode.h"
 #include "irdma.h"
 #include "irdma_funcs.h"
+#include "irdma_helpers.h"
 #include <rdma/ib_pack.h>  // rdma_network_hdr, maybe among other things
 #include "rxe.h"
 #include "rxe_loc.h"
@@ -57,23 +58,6 @@ static handle_incoming_status send_data_in(struct irdma_context *ic, void *data_
 
 /* Guarantee atomicity of atomic operations at the machine level. */
 static DEFINE_SPINLOCK(atomic_ops_lock);
-
-static void cleanup(struct rxe_qp *qp,
-				struct rxe_pkt_info *pkt)
-{
-	struct sk_buff *skb;
-
-	if (pkt) {
-		skb = skb_dequeue(&qp->req_pkts);
-		rxe_drop_ref(qp);
-		kfree_skb(skb);
-	}
-
-	if (qp->resp.mr) {
-		rxe_drop_ref(qp->resp.mr);
-		qp->resp.mr = NULL;
-	}
-}
 
 // ****************************
 // handle_incoming funcs for 'req' opcodes
@@ -164,7 +148,7 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
 	payload.length = min_t(int, res->read.resid, mtu);
 
     // cheating to access this private function, will fix in subsequent commit
-    if(__send_packet_with_opcode(ic, &payload, pkt, AETH_ACK_UNLIMITED, res->cur_psn, opcode)) return INCOMING_ERROR_RNR;
+    if(__send_packet_with_opcode(ic->qp, &payload, pkt, AETH_ACK_UNLIMITED, res->cur_psn, opcode)) return INCOMING_ERROR_RNR;
 
 	res->read.va += payload.length;
 	res->read.resid -= payload.length;
@@ -177,7 +161,7 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
 		ic->qp->resp.opcode = -1;
 		if (psn_compare(res->cur_psn, ic->qp->resp.psn) >= 0)
 			ic->qp->resp.psn = res->cur_psn;
-		cleanup(ic->qp, pkt);
+		__cleanup(ic->qp, pkt);
         return INCOMING_DONE;
 	}
 }
@@ -263,7 +247,7 @@ static handle_duplicate_status handle_duplicate_atomic(struct irdma_context* ic,
     // Resource not found, Class D error.  Drop the request.
     return HANDLED;
   } else {
-    send_packet_raw(ic, pkt, res->atomic.skb, to_rdev(ic->qp->ibqp.device), true);
+    resend_packet(ic, pkt, res->atomic.skb, to_rdev(ic->qp->ibqp.device), true);
     return HANDLED;
   }
 }

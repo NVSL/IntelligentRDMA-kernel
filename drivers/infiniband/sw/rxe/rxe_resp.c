@@ -37,10 +37,7 @@
 #include "rxe_loc.h"
 #include "rxe_queue.h"
 
-#include "irdma_funcs.h"  // TODO: eventually this dependency should be removed,
-                          // either because code depending on it is moved to
-                          // irdma_opcode.c, or because irdma_opcode.c is
-                          // merged with this file
+#include "irdma_helpers.h"
 
 enum resp_states {
 	RESPST_NONE,
@@ -641,25 +638,6 @@ static enum resp_states acknowledge(struct rxe_qp *qp,
     return RESPST_CLEANUP;
 }
 
-static enum resp_states cleanup(struct rxe_qp *qp,
-				struct rxe_pkt_info *pkt)
-{
-	struct sk_buff *skb;
-
-	if (pkt) {
-		skb = skb_dequeue(&qp->req_pkts);
-		rxe_drop_ref(qp);
-		kfree_skb(skb);
-	}
-
-	if (qp->resp.mr) {
-		rxe_drop_ref(qp->resp.mr);
-		qp->resp.mr = NULL;
-	}
-
-	return RESPST_DONE;
-}
-
 static enum resp_states duplicate_request(struct rxe_qp *qp,
 					  struct rxe_pkt_info *pkt)
 {
@@ -784,7 +762,8 @@ int rxe_responder(void *arg)
 			state = acknowledge(qp, pkt);
 			break;
 		case RESPST_CLEANUP:
-			state = cleanup(qp, pkt);
+			__cleanup(qp, pkt);
+            state = RESPST_DONE;
 			break;
 		case RESPST_DUPLICATE_REQUEST:
 			state = duplicate_request(qp, pkt);

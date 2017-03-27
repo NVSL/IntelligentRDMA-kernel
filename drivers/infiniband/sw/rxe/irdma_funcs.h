@@ -1,3 +1,6 @@
+#ifndef IRDMA_FUNCS_H
+#define IRDMA_FUNCS_H
+
 #include "irdma.h"
 
 // forward declarations of structs etc we use
@@ -42,8 +45,8 @@ int send_nak_packet(
 );
 
 // This function assumes that everything is already initialized and ready to go
-// It can be used to resend packets (and it's also used internally by some of the functions above)
-int send_packet_raw(
+// (otherwise use the functions above)
+int resend_packet(
     struct irdma_context* ic,
     struct rxe_pkt_info* pkt,
     struct sk_buff* skb,
@@ -51,15 +54,7 @@ int send_packet_raw(
     bool atomicack
 );
 
-// cheating to allow access to this private function, will fix in subsequent commit
-int __send_packet_with_opcode(
-    struct irdma_context* ic,
-    struct irdma_mem* payload,
-    struct rxe_pkt_info* req_pkt,
-    u8 syndrome,
-    u32 psn,
-    unsigned opcode_num
-);
-
 // Process a class A or C error (both are treated the same in this implementation)
 void do_class_ac_error(struct irdma_context* ic, u8 syndrome, enum ib_wc_status status);
+
+#endif
