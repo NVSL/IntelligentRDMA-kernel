@@ -37,7 +37,7 @@
 #include "rxe_loc.h"
 #include "rxe_queue.h"
 
-#include "irdma_funcs.h"  // eventually this dependency should be removed,
+#include "irdma_funcs.h"  // TODO: eventually this dependency should be removed,
                           // either because code depending on it is moved to
                           // irdma_opcode.c, or because irdma_opcode.c is
                           // merged with this file
@@ -627,11 +627,16 @@ static enum resp_states acknowledge(struct rxe_qp *qp,
 	if (qp_type(qp) != IB_QPT_RC)
 		return RESPST_CLEANUP;
 
-	if (qp->resp.aeth_syndrome != AETH_ACK_UNLIMITED)
-		send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, qp->resp.aeth_syndrome, pkt->psn);
-    else if (bth_ack(pkt))
-        send_packet(&ic, rxe_wr_opcode_info[rxe_opcode[pkt->opcode].req.wr_opcode_num].std.ack_opcode_num,
-            NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
+	if (qp->resp.aeth_syndrome != AETH_ACK_UNLIMITED) {
+      // existing code had one case here, but I split it into two just in
+      // case qp->resp.aeth_syndrome could be either an ack or a nak
+      if((qp->resp.aeth_syndrome & AETH_TYPE_MASK) == AETH_ACK)
+		send_ack_packet(&ic, NULL, pkt, qp->resp.aeth_syndrome, pkt->psn);
+      else
+        send_nak_packet(&ic, pkt, qp->resp.aeth_syndrome, pkt->psn);
+    } else if (bth_ack(pkt)) {
+        send_ack_packet(&ic, NULL, pkt, AETH_ACK_UNLIMITED, pkt->psn);
+    }
 
     return RESPST_CLEANUP;
 }
@@ -786,7 +791,7 @@ int rxe_responder(void *arg)
 			break;
 		case RESPST_ERR_PSN_OUT_OF_SEQ:
 			/* RC only - Class B. Drop packet. */
-			send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, AETH_NAK_PSN_SEQ_ERROR, qp->resp.psn);
+			send_nak_packet(&ic, pkt, AETH_NAK_PSN_SEQ_ERROR, qp->resp.psn);
 			state = RESPST_CLEANUP;
 			break;
 
@@ -805,7 +810,7 @@ int rxe_responder(void *arg)
 		case RESPST_ERR_RNR:
 			if (qp_type(qp) == IB_QPT_RC) {
 				/* RC - class B */
-				send_packet(&ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt,
+				send_nak_packet(&ic, pkt,
 					AETH_RNR_NAK | (~AETH_TYPE_MASK & qp->attr.min_rnr_timer),
 					pkt->psn);
 			} else {

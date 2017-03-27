@@ -22,13 +22,13 @@ struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn) {
   return NULL;
 }
 
-int send_packet(
+int __send_packet_with_opcode(
     struct irdma_context* ic,
-    unsigned opcode_num,
     struct irdma_mem* payload,
-    struct rxe_pkt_info* cur_pkt,
+    struct rxe_pkt_info* req_pkt,
     u8 syndrome,
-    u32 psn
+    u32 psn,
+    unsigned opcode_num
 ) {
   struct rxe_pkt_info new_pkt;
   struct sk_buff *skb;
@@ -41,13 +41,18 @@ int send_packet(
   bool atomicack = rxe_opcode[opcode_num].mask & RXE_ATMACK_MASK;
 
   if(unlikely(!(rxe_opcode[opcode_num].is_ack))) {
-      pr_err("Tried to send_packet but specifying a non-ack opcode\n");
+      pr_err("Tried to send_ack_packet but specifying a non-ack opcode\n");
       return -EINVAL;
   }
 
   // allocate packet
-  pad = (-payload->length) & 0x3;
-  paylen = rxe_opcode[opcode_num].length + payload->length + pad + RXE_ICRC_SIZE;
+  if(payload) {
+    pad = (-payload->length) & 0x3;
+    paylen = rxe_opcode[opcode_num].length + payload->length + pad + RXE_ICRC_SIZE;
+  } else {
+    pad = 0;
+    paylen = rxe_opcode[opcode_num].length + RXE_ICRC_SIZE;
+  }
   skb = rxe->ifc_ops->init_packet(rxe, &ic->qp->pri_av, paylen, &new_pkt);
   if(!skb) return -ENOMEM;
   new_pkt.qp = ic->qp;
@@ -56,11 +61,11 @@ int send_packet(
   //new_pkt.irdma_opnum = rxe_opcode[opcode_num].req.irdma_opnum;
     // this is an 'ack' packet, so its req.irdma_opnum is invalid, and
     // new_pkt's irdma_opnum shouldn't ever be touched either
-  new_pkt.offset = cur_pkt->offset;  // can I change this to rxe_opcode[opcode_num].offset?
+  new_pkt.offset = req_pkt->offset;  // can I change this to rxe_opcode[opcode_num].offset?
   new_pkt.paylen = paylen;
 
   // fill in bth using the request packet headers
-  memcpy(new_pkt.hdr, cur_pkt->hdr, cur_pkt->offset + RXE_BTH_BYTES);
+  memcpy(new_pkt.hdr, req_pkt->hdr, req_pkt->offset + RXE_BTH_BYTES);
   // third argument could be new_pkt.offset + RXE_BTH_BYTES
   bth_set_opcode(&new_pkt, opcode_num);
   bth_set_qpn(&new_pkt, ic->qp->attr.dest_qp_num);
@@ -87,14 +92,45 @@ int send_packet(
   if(payload) {
     err = rxe_mem_copy(payload->mr, payload->va, payload_addr(&new_pkt), payload->length, from_mem_obj, &crc);
     if(err) pr_err("Failed copying memory\n");  // but for some reason, keep going
+    p = payload_addr(&new_pkt) + payload->length + bth_pad(&new_pkt);
+  } else {
+    p = payload_addr(&new_pkt) + bth_pad(&new_pkt);
   }
-  p = payload_addr(&new_pkt) + payload->length + bth_pad(&new_pkt);
   *p = ~crc;
 
   err = send_packet_raw(ic, &new_pkt, skb, rxe, atomicack);
   if(err) pr_err_ratelimited("Failed sending packet with opcode %s\n", rxe_opcode[opcode_num].name);
 
   return err;
+}
+
+int send_ack_packet(
+    struct irdma_context* ic,
+    struct irdma_mem* payload,
+    struct rxe_pkt_info* req_pkt,
+    u8 syndrome,
+    u32 psn
+) {
+  struct rxe_wr_opcode_info* wr_info = &rxe_wr_opcode_info[rxe_opcode[req_pkt->opcode].req.wr_opcode_num];
+  unsigned ack_opcode_num = wr_info->std.ack_opcode_num;
+  if((syndrome & AETH_TYPE_MASK) != AETH_ACK) {
+    pr_err("Can't send ack packet with NAK syndrome 0x%x\n", syndrome);
+    return -1;  // what should the error code be here?
+  }
+  return __send_packet_with_opcode(ic, payload, req_pkt, syndrome, psn, ack_opcode_num);
+}
+
+int send_nak_packet(
+    struct irdma_context* ic,
+    struct rxe_pkt_info* req_pkt,
+    u8 syndrome,
+    u32 psn
+) {
+  if((syndrome & AETH_TYPE_MASK) == AETH_ACK) {
+    pr_err("Can't send NAK packet with ack syndrome 0x%x\n", syndrome);
+    return -1;  // what should the error code be here?
+  }
+  return __send_packet_with_opcode(ic, NULL, req_pkt, syndrome, psn, IB_OPCODE_RC_ACKNOWLEDGE);
 }
 
 int send_packet_raw(

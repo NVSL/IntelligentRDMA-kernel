@@ -163,7 +163,8 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
     payload.va = res->read.va;
 	payload.length = min_t(int, res->read.resid, mtu);
 
-    if(send_packet(ic, opcode, &payload, pkt, AETH_ACK_UNLIMITED, res->cur_psn)) return INCOMING_ERROR_RNR;
+    // cheating to access this private function, will fix in subsequent commit
+    if(__send_packet_with_opcode(ic, &payload, pkt, AETH_ACK_UNLIMITED, res->cur_psn, opcode)) return INCOMING_ERROR_RNR;
 
 	res->read.va += payload.length;
 	res->read.resid -= payload.length;
@@ -221,7 +222,7 @@ static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, s
 // handle_duplicate funcs for 'req' opcodes
 static handle_duplicate_status handle_duplicate_sendorwrite(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
   // Ack again and cleanup. C9-105.
-  if(bth_ack(pkt)) send_packet(ic, IB_OPCODE_RC_ACKNOWLEDGE, NULL, pkt, AETH_ACK_UNLIMITED, (ic->qp->resp.psn-1) & BTH_PSN_MASK);
+  if(bth_ack(pkt)) send_ack_packet(ic, NULL, pkt, AETH_ACK_UNLIMITED, (ic->qp->resp.psn-1) & BTH_PSN_MASK);
   return HANDLED;
 }
 
