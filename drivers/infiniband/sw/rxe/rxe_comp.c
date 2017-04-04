@@ -313,24 +313,9 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     // Complication is that there are two flavors of ACKs and many of NAKs
 
     switch(rxe_opcode[pkt->opcode].ack.handle_incoming(&ic, pkt, wqe)) {
-      case ACK_ERROR:
-        return COMPST_ERROR;
-      case ACK_OK:
-        // Curious why this case is different
-        // I wonder whether we could just use the 'else' branch for the
-        // IB_OPCODE_RC_ACKNOWLEDGE case as well, and if it would be equivalent
-        if(pkt->opcode == IB_OPCODE_RC_ACKNOWLEDGE) {
-          if(wqe->state == wqe_state_pending &&
-             wqe->last_psn == pkt->psn)
-            return COMPST_COMP_ACK;
-          else
-            return COMPST_UPDATE_COMP;
-        } else {
-          if (wqe->dma.resid == 0 && (pkt->mask & RXE_END_MASK))
-            return COMPST_COMP_ACK;
-          else
-            return COMPST_UPDATE_COMP;
-        }
+      case ACK_ERROR: return COMPST_ERROR;
+      case ACK_NEXT: return COMPST_UPDATE_COMP;
+      case ACK_COMPLETE: return COMPST_COMP_ACK;
       default:
         pr_warn("rxe_comp: missed a case of ack.handle_incoming\n");
         return COMPST_ERROR;

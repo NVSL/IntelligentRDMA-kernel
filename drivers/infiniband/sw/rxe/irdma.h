@@ -26,8 +26,9 @@ typedef enum {
 
 // handle_ack_status is the return type of the handle_incoming function for an 'ack' opcode.
 typedef enum {
-  ACK_OK = 0,  // indicates no error
-  ACK_ERROR,   // indicates that there was an error
+  ACK_COMPLETE,  // indicates ack handled and operation complete
+  ACK_NEXT,      // indicates ack handled but still waiting on more 'ack' packets (I think?)
+  ACK_ERROR,     // indicates that there was an error
 } handle_ack_status;
 
 // handle_loc_status is the return type of the handle_wr function for a 'loc' wr.

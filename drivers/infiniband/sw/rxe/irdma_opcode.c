@@ -201,10 +201,12 @@ static handle_ack_status handle_incoming_read_ack(struct irdma_context* ic, stru
   ret = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE,
           &wqe->dma, payload_addr(pkt),
           payload_size(pkt), to_mem_obj, NULL);
-  if (ret)
-    return ACK_ERROR;
+  if (ret) return ACK_ERROR;
+
+  if(wqe->dma.resid == 0 && (pkt->mask & RXE_END_MASK))
+    return ACK_COMPLETE;
   else
-    return ACK_OK;
+    return ACK_NEXT;
 }
 
 static handle_ack_status handle_incoming_atomic_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
@@ -216,15 +218,19 @@ static handle_ack_status handle_incoming_atomic_ack(struct irdma_context* ic, st
   ret = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE,
           &wqe->dma, &atomic_orig,
           sizeof(u64), to_mem_obj, NULL);
-  if (ret)
-    return ACK_ERROR;
+  if (ret) return ACK_ERROR;
+
+  if(wqe->dma.resid == 0 && (pkt->mask & RXE_END_MASK))
+    return ACK_COMPLETE;
   else
-    return ACK_OK;
+    return ACK_NEXT;
 }
 
 static handle_ack_status handle_incoming_sendorwrite_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
-  // nothing to do
-  return ACK_OK;
+  if(wqe->state == wqe_state_pending && wqe->last_psn == pkt->psn)
+    return ACK_COMPLETE;
+  else
+    return ACK_NEXT;
 }
 
 // ****************************
