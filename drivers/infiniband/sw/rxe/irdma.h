@@ -353,14 +353,14 @@ enum ynb { YES, NO, BOTH };
 //     This means the basename must be max 56 characters, if immdt==NO and invalidate==NO;
 //     max 47 characters, if immdt==NO and invalidate==YES/BOTH;
 //     or max 45 characters, if immdt==YES/BOTH
-//   irdma_req_opnum: see comments on register_single_opcode.  Will apply to all four opcodes.
-//   handle_incoming: see comments on register_single_opcode.  Will apply to all four opcodes.
-//   handle_duplicate: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   irdma_req_opnum: see comments on register_single_req_opcode.  Will apply to all four opcodes.
+//   handle_incoming: see comments on register_single_req_opcode.  Will apply to all four opcodes.
+//   handle_duplicate: see comments on register_single_req_opcode.  Will apply to all four opcodes.
 //   wr_opcode_num: the number of the wr_opcode for these opcodes (will apply to all four opcodes)
 //     (previously registered with register_*std*_wr_opcode)
 //     Each wr_opcode can only have one req_opcode_series (or single req_opcode) per qpt; you can't
 //       register multiple req_opcode_series (or single req_opcodes) with the same wr_opcode and qpt
-//   qpt: see comments on register_single_opcode.  Will apply to all four opcodes.
+//   qpt: see comments on register_single_req_opcode.  Will apply to all four opcodes.
 //   immdt: whether the series includes an immediate value to be presented to the receiver.
 //     In any case, only the opcodes which end the series (i.e. 'end' and 'only') carry the immediate.
 //     If YES, the 'end' and 'only' opcodes carry an immediate.  If NO, they don't.
@@ -399,12 +399,12 @@ enum ynb { YES, NO, BOTH };
 //     TODO: Unclear if we should handle requiresReceive==FALSE + invalidate similarly?
 //       No examples of that case in the existing opcodes
 //       Provisionally, I'm letting the requiresReceive==FALSE hold even for series carrying invalidates
-//   perms : see comments on register_single_opcode.  Will apply to all four opcodes.
+//   perms : see comments on register_single_req_opcode.  Will apply to all four opcodes.
 //   sched_priority : to my current understanding, setting this to TRUE instructs the
 //     internal scheduler to always handle incoming packets from this series immediately,
 //     pushing aside other tasks (e.g. posting sends, completes, etc).
 //     In existing code, no series gets this treatment (only the single opcode IB_OPCODE_RC_RDMA_READ_REQUEST).
-//   comp_swap : see comments on register_single_opcode.  Will apply to all four opcodes.
+//   comp_swap : see comments on register_single_req_opcode.  Will apply to all four opcodes.
 // immdt-invalidate restriction:
 //   If either 'immdt' or 'invalidate' is YES, the other must be NO.
 //   If both 'immdt' and 'invalidate' are BOTH, a total of three versions of the series will be registered:
