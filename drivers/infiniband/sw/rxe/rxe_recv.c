@@ -376,6 +376,11 @@ int rxe_rcv(struct sk_buff *skb)
 	pkt->qp = NULL;
 	pkt->mask |= rxe_opcode[pkt->opcode].mask;
 
+    if(!rxe_opcode[pkt->opcode].name[0]) {
+      pr_warn("Received unregistered opcode %u\n", pkt->opcode);
+      goto drop;
+    }
+
 	if (unlikely(skb->len < header_size(pkt)))
 		goto drop;
 

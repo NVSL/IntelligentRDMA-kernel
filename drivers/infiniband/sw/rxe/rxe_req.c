@@ -193,7 +193,6 @@ static int next_opcode(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
   int fits = (wqe->dma.resid <= qp->mtu);
   enum ib_qp_type qpt = qp_type(qp);
   struct rxe_wr_opcode_info info = rxe_wr_opcode_info[wr_opcode];
-  if(!info.name[0]) return -EINVAL;  // this wr_opcode not registered
 
   if(qpt==IB_QPT_SMI || qpt==IB_QPT_GSI) qpt = IB_QPT_UD;
     // for this function, we handle SMI and GSI like UD (returning a UD opcode)
@@ -497,6 +496,10 @@ next_wqe:
 	if (unlikely(!wqe))
 		goto exit;
 
+    // ensure the wr_opcode is registered
+    if(!rxe_wr_opcode_info[wqe->wr.opcode].name[0]) goto err;
+
+    // handle type==LOCAL wr_opcodes specially
 	if (rxe_wr_opcode_info[wqe->wr.opcode].type == LOCAL) {
       struct irdma_context ic = { qp };
       switch(rxe_wr_opcode_info[wqe->wr.opcode].loc.handle_wr(&ic, wqe)) {
@@ -514,7 +517,7 @@ next_wqe:
           break;
         default:
           pr_err("Missed a case of handle_loc_status\n");
-          goto exit;
+          goto err;
       }
     }
 

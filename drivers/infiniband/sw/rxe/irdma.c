@@ -36,7 +36,6 @@ register_opcode_status register_std_wr_opcode(
   if(strlen(name) > 63) return OPCODE_INVALID;
   if(!name[0]) return OPCODE_INVALID;
   if(info->name[0]) return OPCODE_IN_USE;  // name=="" indicates free
-    // TODO if someone tries to actually use a not-yet-registered wr_opcode, give a suitable error msg
   if(type & ~(WR_SEND_MASK | WR_WRITE_MASK | WR_READ_MASK | WR_ATOMIC_MASK)) return OPCODE_INVALID;
     // the above line enforces that you can only send one of those four bits
     // (or combinations of, I guess) as 'type'
@@ -85,7 +84,6 @@ register_opcode_status register_loc_wr_opcode(
   if(strlen(name) > 63) return OPCODE_INVALID;
   if(!name[0]) return OPCODE_INVALID;
   if(info->name[0]) return OPCODE_IN_USE;  // name=="" indicates free
-    // TODO if someone tries to actually use a not-yet-registered 'loc' wr_opcode, give a suitable error msg
   strcpy(info->name, name);
   info->type = LOCAL;
   info->mask = (wr_inline ? WR_INLINE_MASK : 0);
@@ -153,7 +151,6 @@ static register_opcode_status __register_req_opcode(
   if(unlikely(opcode_num == 0)) return OPCODE_INVALID;
   if(unlikely(!name[0])) return OPCODE_INVALID;
   if(unlikely(info->name[0])) return OPCODE_IN_USE;  // name=="" indicates free
-    // TODO if someone tries to actually use a not-yet-registered req_opcode, give a suitable error msg
   if(unlikely(immdt && invalidate)) return OPCODE_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
@@ -237,7 +234,6 @@ static register_opcode_status __register_ack_opcode(
   if(unlikely(opcode_num == 0)) return OPCODE_INVALID;
   if(unlikely(!name[0])) return OPCODE_INVALID;
   if(unlikely(info->name[0])) return OPCODE_IN_USE;  // name=="" indicates free
-    // TODO if someone tries to actually use a not-yet-registered ack_opcode, give a suitable error msg
   if(unlikely(strlen(name) > 63)) return OPCODE_INVALID;
   mask =
     // see comments on __register_req_opcode for fuller explanation of mask bits

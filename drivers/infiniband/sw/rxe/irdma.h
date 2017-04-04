@@ -100,7 +100,6 @@ struct rxe_opcode_group {
     struct rxe_opcode_set opcode_set;  // valid for is_series==TRUE
       // '0' for opcode_num or for opcode_set.start_opcode_num indicates not yet registered
       // note that '0' is never valid here; we reserved the opcode value '0' (for this and for NAK)
-      // TODO if someone tries to use not-yet-registered opcode num or set, give suitable error msg
   };
 };
 
