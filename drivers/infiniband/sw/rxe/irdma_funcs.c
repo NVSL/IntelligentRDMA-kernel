@@ -81,7 +81,7 @@ int send_nak_packet(
     pr_err("Can't send NAK packet with ack syndrome 0x%x\n", syndrome);
     return -1;  // what should the error code be here?
   }
-  return __send_packet_with_opcode(ic->qp, NULL, req_pkt, syndrome, psn, IB_OPCODE_RC_ACKNOWLEDGE);
+  return __send_packet_with_opcode(ic->qp, NULL, req_pkt, syndrome, psn, IRDMA_OPCODE_NAK);
 }
 
 int resend_packet(

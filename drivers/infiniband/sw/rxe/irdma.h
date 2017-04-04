@@ -64,6 +64,9 @@ typedef enum {
 } IRDMA_REQ_OPNUM;
 #endif
 
+// rxe_opcode 0 is reserved for our special NAK operation, and for marking unregistered
+#define IRDMA_OPCODE_NAK 0
+
 enum rxe_wr_mask {
 	WR_INLINE_MASK = BIT(0),
 	WR_ATOMIC_MASK = BIT(1),

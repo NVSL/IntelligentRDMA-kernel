@@ -220,6 +220,9 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     } else {
       // In the middle of an operation
       if (mask & RXE_START_MASK) return COMPST_ERROR;  // can't start new operation
+        // note this implies that receiving NAK in the middle of an operation
+        // gives COMPST_ERROR rather than the usual NAK handling.
+        // I believe this is the existing behavior though.
       prev_series_id = series_id(&rxe_opcode[qp->comp.opcode].containingGroup);
       this_series_id = series_id(&rxe_opcode[pkt->opcode].containingGroup);
       if(prev_series_id != this_series_id) {
@@ -229,30 +232,17 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     }
 
     /* Check operation validity. */
-    // High-level comment: can we possibly create a new opcode specifically for NAKs
-    // rather than just re-using IB_OPCODE_RC_ACKNOWLEDGE?
-    // Right now IB_OPCODE_RC_ACKNOWLEDGE plays two very different roles:
-    // (1) normal 'ack' for all write/send wr's (when syn & AETH_TYPE_MASK == AETH_ACK)
-    // (2) NAK for any wr whatsoever (when syn & AETH_TYPE_MASK != AETH_ACK)
-    // Since we want to handle NAKs internally, there's this weird dependence where we
-    // need to guarantee that the user will register IB_OPCODE_RC_ACKNOWLEDGE correctly
-    // If we split this, we could create a new opcode specifically for NAKs (which would
-    // exist automatically, the user wouldn't (and couldn't) register it); and then
-    // let the user register whatever normal 'ack's they wanted, under whatever opcodes
-    // they wanted
-    // We would just have a single reserved opcode number (probably 0?) for NAKs
-
     if(pkt->mask & RXE_AETH_MASK) {
       // all 'ack' opcodes except 'middle' opcodes have RXE_AETH_MASK
       syn = aeth_syn(pkt);
     }
     // special: first check for NAKs and handle them internally
     // before passing control to user-provided code
-    if(pkt->opcode == IB_OPCODE_RC_ACKNOWLEDGE) {
+    if(pkt->opcode == IRDMA_OPCODE_NAK) {
       switch(syn & AETH_TYPE_MASK) {
         case AETH_ACK:
-          // not a NAK, let user code handle
-          break;
+          pr_err("IRDMA_OPCODE_NAK received, but indicating ACK\n");
+          return COMPST_ERROR;
         case AETH_RNR_NAK: return COMPST_RNR_RETRY;
         case AETH_NAK:
           switch(syn) {
@@ -289,7 +279,7 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
           return COMPST_ERROR;
 		}
     }
-    // Any non-IB_OPCODE_RC_ACKNOWLEDGE with a NAK is an error
+    // Any other opcode with a NAK is an error
     if( (pkt->mask & RXE_AETH_MASK) &&
         ((syn & AETH_TYPE_MASK) != AETH_ACK)) {
         return COMPST_ERROR;
@@ -305,13 +295,11 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
       // pkt->opcode was IB_OPCODE_RC_ACKNOWLEDGE
       // (it seems it just assumed wr.opcode was a suitable value)
       // I'm assuming that was unintentional, or at least that
-      // adding the check doesn't break anything.  Hopefully I'm
-      // not wrong about this.
+      // adding the check doesn't break anything.
     }
 
     // At this point we know we have syn & AETH_TYPE_MASK == AETH_ACK
-    // and some 'ack' opcode, possibly still IB_OPCODE_RC_ACKNOWLEDGE
-    // (we let that case drop through earlier).  We also know the 'ack'
+    // and some 'ack' opcode.  We also know the 'ack'
     // opcode correctly matches the wr_opcode which was originally posted.
     // This is the setting in which we'll call a user-specified function
     // to handle the 'ack'.
@@ -322,6 +310,7 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
     // NAKs, we should probably just provide a function for them to call;
     // and for users sending normal ACKs, we should set syn to AETH_ACK
     // for them
+    // Complication is that there are two flavors of ACKs and many of NAKs
 
     switch(rxe_opcode[pkt->opcode].ack.handle_incoming(&ic, pkt, wqe)) {
       case ACK_ERROR:

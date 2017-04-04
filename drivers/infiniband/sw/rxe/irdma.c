@@ -5,16 +5,6 @@
 struct rxe_wr_opcode_info rxe_wr_opcode_info[IRDMA_MAX_WR_OPCODES];
 struct rxe_opcode_info rxe_opcode[IRDMA_MAX_RXE_OPCODES];
 
-void irdma_init(void) {
-  unsigned i;
-  for(i = 0; i < IRDMA_MAX_WR_OPCODES; i++) {
-    rxe_wr_opcode_info[i].name[0] = '\0';  // mark as free
-  }
-  for(i = 0; i < IRDMA_MAX_RXE_OPCODES; i++) {
-    rxe_opcode[i].name[0] = '\0';  // mark as free
-  }
-}
-
 unsigned series_id(struct rxe_opcode_group* opcode_group) {
   if(opcode_group->is_series) return opcode_group->opcode_set.start_opcode_num;
   else return opcode_group->opcode_num;
@@ -228,7 +218,7 @@ static register_opcode_status __register_req_opcode(
   info->req.handle_duplicate = handle_duplicate;
   info->req.perms = perms;
   info->qpt = qpt;
-  computeLengthAndOffset(&rxe_opcode[opcode_num]);
+  computeLengthAndOffset(info);
   return OPCODE_OK;
 }
 
@@ -264,7 +254,7 @@ static register_opcode_status __register_ack_opcode(
   info->is_ack = true;
   info->ack.handle_incoming = handle_incoming;
   info->qpt = IB_QPT_RC;  // all 'ack' opcodes are RC-only
-  computeLengthAndOffset(&rxe_opcode[opcode_num]);
+  computeLengthAndOffset(info);
   return OPCODE_OK;
 }
 
@@ -654,4 +644,27 @@ err1:
   __deregister_opcode(start_opcode_num);
 err0:
   return ret;
+}
+
+void irdma_init(void) {
+  unsigned i;
+  struct rxe_opcode_info* info;
+  for(i = 0; i < IRDMA_MAX_WR_OPCODES; i++) {
+    rxe_wr_opcode_info[i].name[0] = '\0';  // mark as free
+  }
+  for(i = 0; i < IRDMA_MAX_RXE_OPCODES; i++) {
+    rxe_opcode[i].name[0] = '\0';  // mark as free
+  }
+
+  // custom-register IRDMA_OPCODE_NAK
+  info = &rxe_opcode[IRDMA_OPCODE_NAK];
+  strcpy(info->name, "IRDMA_OPCODE_NAK");
+  info->mask = RXE_START_MASK | RXE_END_MASK | RXE_AETH_MASK;
+  info->is_ack = true;
+  info->ack.handle_incoming = NULL;  // handled specially in the code,
+                                     // rather than through this function
+  info->qpt = IB_QPT_RC;  // all 'ack' opcodes are RC-only
+  computeLengthAndOffset(info);
+  info->containingGroup.is_series = false;
+  info->containingGroup.opcode_num = IRDMA_OPCODE_NAK;
 }
