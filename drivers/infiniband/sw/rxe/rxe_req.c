@@ -323,8 +323,7 @@ static struct sk_buff *init_req_packet(struct rxe_qp *qp,
 
 	if (pkt->mask & RXE_ATMETH_MASK) {
 		atmeth_set_va(pkt, wqe->iova);
-		if (opcode == IB_OPCODE_RC_COMPARE_SWAP ||
-		    opcode == IB_OPCODE_RD_COMPARE_SWAP) {
+		if (rxe_opcode[opcode].mask & IRDMA_COMPSWAP_MASK) {
 			atmeth_set_swap_add(pkt, ibwr->wr.atomic.swap);
 			atmeth_set_comp(pkt, ibwr->wr.atomic.compare_add);
 		} else {

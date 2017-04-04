@@ -420,7 +420,8 @@ register_opcode_status irdma_init_opcodes(void) {
                               IB_WR_SEND_WITH_INV,
       /*.requiresReceive = */ true,
       /*.perms           = */ IRDMA_PERM_NONE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_req_opcode_series(
       IB_OPCODE_RC_RDMA_WRITE_FIRST,
@@ -443,7 +444,8 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_WRITE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
       IB_OPCODE_RC_RDMA_READ_REQUEST,
@@ -455,7 +457,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_READ,
-      /*.sched_priority  = */ true
+      /*.sched_priority  = */ true,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
       IB_OPCODE_RC_COMPARE_SWAP,
@@ -467,7 +470,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_ATOMIC,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ true
   ))
   WITH_CHECK(register_single_req_opcode(
       IB_OPCODE_RC_FETCH_ADD,
@@ -479,7 +483,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_ATOMIC,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
 
   /* UC */
@@ -504,7 +509,8 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ true,
       /*.perms           = */ IRDMA_PERM_NONE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_req_opcode_series(
       IB_OPCODE_UC_RDMA_WRITE_FIRST,
@@ -527,7 +533,8 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_WRITE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
 
   /* UD */
@@ -541,7 +548,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_UD,
       /*.requiresReceive = */ true,
       /*.perms           = */ IRDMA_PERM_NONE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
       IB_OPCODE_UD_SEND_ONLY_WITH_IMMEDIATE,
@@ -553,7 +561,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_UD,
       /*.requiresReceive = */ true,
       /*.perms           = */ IRDMA_PERM_NONE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
 
   /* RD */
@@ -611,7 +620,8 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ true,
       /*.perms           = */ IRDMA_PERM_NONE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_req_opcode_series(
       IB_OPCODE_RD_RDMA_WRITE_FIRST,
@@ -634,7 +644,8 @@ register_opcode_status irdma_init_opcodes(void) {
                               0,  // ignored
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_WRITE,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
       IB_OPCODE_RD_RDMA_READ_REQUEST,
@@ -648,7 +659,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_READ,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
       IB_OPCODE_RD_COMPARE_SWAP,
@@ -662,7 +674,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_ATOMIC,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ true
   ))
   WITH_CHECK(register_single_req_opcode(
       IB_OPCODE_RD_FETCH_ADD,
@@ -676,7 +689,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.invalidate      = */ false,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_ATOMIC,
-      /*.sched_priority  = */ false
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
   ))
 #endif  // if 0
 

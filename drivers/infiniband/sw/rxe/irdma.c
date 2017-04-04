@@ -154,7 +154,7 @@ static register_opcode_status __register_req_opcode(
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     bool immdt, bool invalidate,
-    bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority,
+    bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority, bool comp_swap,
     /* internal arguments */ bool start, bool middle, bool end
 ) {
   enum rxe_hdr_mask mask;
@@ -190,6 +190,7 @@ static register_opcode_status __register_req_opcode(
     | SET_IF(middle, RXE_MIDDLE_MASK)
     | SET_IF(end, RXE_END_MASK)
     | SET_IF(sched_priority, IRDMA_SCHED_PRIORITY_MASK)
+    | SET_IF(comp_swap, IRDMA_COMPSWAP_MASK)
         // RXE_RETH_MASK indicates whether the packet needs an 'RDMA extended transport header'.
         // The rule here reflects existing convention.
     | SET_IF((irdma_req_opnum == IRDMA_REQ_READ || irdma_req_opnum == IRDMA_REQ_WRITE) && start, RXE_RETH_MASK)
@@ -279,7 +280,7 @@ register_opcode_status register_single_req_opcode(
   handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
   unsigned wr_opcode_num,
   enum ib_qp_type qpt,
-  bool requiresReceive, unsigned char perms, bool sched_priority
+  bool requiresReceive, unsigned char perms, bool sched_priority, bool comp_swap
 ) {
   register_opcode_status st;
   struct rxe_opcode_group thisGroup;
@@ -306,7 +307,7 @@ register_opcode_status register_single_req_opcode(
       /* invalidate = */ wr_info->mask & WR_INV_MASK,
       requiresReceive,
       /* postComplete */ wr_info->mask & WR_COMP_MASK,
-      perms, sched_priority,
+      perms, sched_priority, comp_swap,
       /* start     = */ true,   /* \                           */
       /* middle    = */ false,  /*  |--  (treat as an 'only')  */
       /* end       = */ true    /* /                           */
@@ -360,7 +361,7 @@ register_opcode_status register_req_opcode_series(
   enum ib_qp_type qpt,
   enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
   enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
-  bool requiresReceive, unsigned char perms, bool sched_priority
+  bool requiresReceive, unsigned char perms, bool sched_priority, bool comp_swap
 ) {
   // TODO: Here and in register_ack_opcode_series make sure that we're correctly handling the (error) case where
   //   the user passes in duplicates among the (not-ignored) rxe_opcodes or (not-ignored) wr_opcodes
@@ -437,6 +438,7 @@ register_opcode_status register_req_opcode_series(
       /* postComplete    = */ false,
       /* perms           = */ perms,
       /* sched_priority  = */ sched_priority,
+      /* comp_swap       = */ comp_swap,
       /* start           = */ true,
       /* middle          = */ false,
       /* end             = */ false
@@ -451,6 +453,7 @@ register_opcode_status register_req_opcode_series(
       /* postComplete    = */ false,
       /* perms           = */ perms,
       /* sched_priority  = */ sched_priority,
+      /* comp_swap       = */ comp_swap,
       /* start           = */ false,
       /* middle          = */ true,
       /* end             = */ false
@@ -465,6 +468,7 @@ register_opcode_status register_req_opcode_series(
       /* postComplete    = */ wr_info->mask & WR_COMP_MASK,
       /* perms           = */ perms,
       /* sched_priority  = */ sched_priority,
+      /* comp_swap       = */ comp_swap,
       /* start           = */ false,
       /* middle          = */ false,
       /* end             = */ true
@@ -479,6 +483,7 @@ register_opcode_status register_req_opcode_series(
       /* postComplete    = */ wr_info->mask & WR_COMP_MASK,
       /* perms           = */ perms,
       /* sched_priority  = */ sched_priority,
+      /* comp_swap       = */ comp_swap,
       /* start           = */ true,
       /* middle          = */ false,
       /* end             = */ true
@@ -495,6 +500,7 @@ register_opcode_status register_req_opcode_series(
         /* postComplete    = */ postComplete_immdt,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
+        /* comp_swap       = */ comp_swap,
         /* start           = */ false,
         /* middle          = */ false,
         /* end             = */ true
@@ -509,6 +515,7 @@ register_opcode_status register_req_opcode_series(
         /* postComplete    = */ postComplete_immdt,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
+        /* comp_swap       = */ comp_swap,
         /* start           = */ true,
         /* middle          = */ false,
         /* end             = */ true
@@ -529,6 +536,7 @@ register_opcode_status register_req_opcode_series(
         /* postComplete    = */ postComplete_inv,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
+        /* comp_swap       = */ comp_swap,
         /* start           = */ false,
         /* middle          = */ false,
         /* end             = */ true
@@ -543,6 +551,7 @@ register_opcode_status register_req_opcode_series(
         /* postComplete    = */ postComplete_inv,
         /* perms           = */ perms,
         /* sched_priority  = */ sched_priority,
+        /* comp_swap       = */ comp_swap,
         /* start           = */ true,  // the (one) existing ONLY_WITH_INVALIDATE opcode has 'false' here,
                                        // but I'm assuming that's an error/typo
         /* middle          = */ false,

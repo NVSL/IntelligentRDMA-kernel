@@ -163,6 +163,7 @@ enum rxe_hdr_mask {
     IRDMA_SCHED_PRIORITY_MASK = BIT(NUM_HDR_TYPES + 6),
     IRDMA_RES_MASK      = BIT(NUM_HDR_TYPES + 7),
     IRDMA_PAYLOAD_MASK  = BIT(NUM_HDR_TYPES + 8),
+    IRDMA_COMPSWAP_MASK = BIT(NUM_HDR_TYPES + 9),
 };
 
 #define OPCODE_NONE		(-1)
@@ -311,6 +312,7 @@ register_opcode_status register_loc_wr_opcode(
 //   internal scheduler to always handle an incoming packet of this type immediately,
 //   pushing aside other tasks (e.g. posting sends, completes, etc).
 //   In existing code, only IB_OPCODE_RC_RDMA_READ_REQUEST gets this treatment.
+// comp_swap : set to TRUE for "compare-and-swap" atomic operations.  Better explanation TBD
 // returns :
 //   OPCODE_OK on success
 //   OPCODE_INVALID if:
@@ -332,7 +334,7 @@ register_opcode_status register_single_req_opcode(
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
-    bool requiresReceive, unsigned char perms, bool sched_priority
+    bool requiresReceive, unsigned char perms, bool sched_priority, bool comp_swap
 );
 
 enum ynb { YES, NO, BOTH };
@@ -402,6 +404,7 @@ enum ynb { YES, NO, BOTH };
 //     internal scheduler to always handle incoming packets from this series immediately,
 //     pushing aside other tasks (e.g. posting sends, completes, etc).
 //     In existing code, no series gets this treatment (only the single opcode IB_OPCODE_RC_RDMA_READ_REQUEST).
+//   comp_swap : see comments on register_single_opcode.  Will apply to all four opcodes.
 // immdt-invalidate restriction:
 //   If either 'immdt' or 'invalidate' is YES, the other must be NO.
 //   If both 'immdt' and 'invalidate' are BOTH, a total of three versions of the series will be registered:
@@ -441,7 +444,7 @@ register_opcode_status register_req_opcode_series(
     enum ib_qp_type qpt,
     enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
     enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
-    bool requiresReceive, unsigned char perms, bool sched_priority
+    bool requiresReceive, unsigned char perms, bool sched_priority, bool comp_swap
 );
 
 // Register an 'ack' opcode. 'ack' opcodes are issued in response to 'request' opcodes,
