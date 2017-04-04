@@ -497,7 +497,7 @@ next_wqe:
 		goto exit;
 
     // ensure the wr_opcode is registered
-    if(!rxe_wr_opcode_info[wqe->wr.opcode].name[0]) goto err;
+    if(!rxe_wr_opcode_info[wqe->wr.opcode].name[0]) goto exit;
 
     // handle type==LOCAL wr_opcodes specially
 	if (rxe_wr_opcode_info[wqe->wr.opcode].type == LOCAL) {
@@ -517,7 +517,7 @@ next_wqe:
           break;
         default:
           pr_err("Missed a case of handle_loc_status\n");
-          goto err;
+          goto exit;
       }
     }
 
