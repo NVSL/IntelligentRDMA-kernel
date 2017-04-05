@@ -16,6 +16,8 @@ struct rxe_mem* __get_mem(struct rxe_qp* qp, struct rxe_pkt_info* pkt, u32 rkey,
 // Process a class A or C error (both are treated the same in this implementation)
 void __do_class_ac_error(struct rxe_qp* qp, u8 syndrome, enum ib_wc_status status);
 
+void __cleanup_mem_ref(struct rxe_qp* qp);
+
 void __cleanup(struct rxe_qp* qp, struct rxe_pkt_info* req_pkt);
 
 struct resp_res* __get_new_resource(struct rxe_qp* qp);

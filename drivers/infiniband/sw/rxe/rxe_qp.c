@@ -39,6 +39,7 @@
 #include "rxe_loc.h"
 #include "rxe_queue.h"
 #include "rxe_task.h"
+#include "irdma_helpers.h"
 
 char *rxe_qp_state_name[] = {
 	[QP_STATE_RESET]	= "RESET",
@@ -536,10 +537,7 @@ static void rxe_qp_reset(struct rxe_qp *qp)
 	qp->resp.goto_error = 0;
 	qp->resp.sent_psn_nak = 0;
 
-	if (qp->resp.mr) {
-		rxe_drop_ref(qp->resp.mr);
-		qp->resp.mr = NULL;
-	}
+	__cleanup_mem_ref(qp);
 
 	cleanup_rd_atomic_resources(qp);
 
@@ -846,10 +844,7 @@ void rxe_qp_cleanup(void *arg)
 	if (qp->pd)
 		rxe_drop_ref(qp->pd);
 
-	if (qp->resp.mr) {
-		rxe_drop_ref(qp->resp.mr);
-		qp->resp.mr = NULL;
-	}
+	__cleanup_mem_ref(qp);
 
 	free_rd_atomic_resources(qp);
 

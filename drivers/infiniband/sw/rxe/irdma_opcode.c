@@ -99,8 +99,8 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
         if((bth_pad(pkt) != (0x3 & (-resid)))) goto lengtherr;
           // "the above case may not be exactly that, but nothing else fits"
       }
-      // can I get rid of these at some point?
-      WARN_ON(ic->qp->resp.mr);
+      WARN_ON(ic->qp->resp.mr);  // already had a reference to one mr,
+                                 // about to get a reference to another
       ic->qp->resp.mr = mem;
     }
 
@@ -136,15 +136,14 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
 
     if(resid != 0) {
       // a zero-byte read is not required to do these steps
+      WARN_ON(ic->qp->resp.mr);  // already had a reference to one mr,
+                                 // about to get a reference to another
       mem = get_mem(ic, pkt, rkey, va, resid, IB_ACCESS_REMOTE_READ);
       if(!mem) return INCOMING_ERROR_RKEY_VIOLATION;
-      // can I get rid of these at some point?
-      WARN_ON(ic->qp->resp.mr);
-      ic->qp->resp.mr = mem;
     }
 
-    // payload inherits the reference to mr from qp
-    payload.mr = ic->qp->resp.mr;  // this is also 'mem' for us
+    // payload inherits the reference to mem (resp.mr) from qp
+    payload.mr = mem;
     ic->qp->resp.mr = NULL;
     payload.va = va;
     payload.length = resid;
@@ -172,8 +171,8 @@ static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, s
       // a zero-byte atomic op is not required to do these steps
       mem = get_mem(ic, pkt, rkey, va, resid, IB_ACCESS_REMOTE_ATOMIC);
       if(!mem) return INCOMING_ERROR_RKEY_VIOLATION;
-      // can I get rid of these at some point?
-      WARN_ON(ic->qp->resp.mr);
+      WARN_ON(ic->qp->resp.mr);  // already had a reference to one mr,
+                                 // about to get a reference to another
       ic->qp->resp.mr = mem;
     }
 

@@ -565,10 +565,8 @@ static enum resp_states do_class_d1e_error(struct rxe_qp *qp)
 			qp->resp.opcode = -1;
 		}
 
-		if (qp->resp.mr) {
-			rxe_drop_ref(qp->resp.mr);
-			qp->resp.mr = NULL;
-		}
+        // isn't this redundant if we're about to do RESPST_CLEANUP?
+		__cleanup_mem_ref(qp);
 
 		return RESPST_CLEANUP;
 	}

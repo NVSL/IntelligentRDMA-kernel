@@ -21,6 +21,13 @@ void __do_class_ac_error(struct rxe_qp* qp, u8 syndrome, enum ib_wc_status statu
 	qp->resp.goto_error	= 1;
 }
 
+void __cleanup_mem_ref(struct rxe_qp* qp) {
+  if(qp->resp.mr) {
+    rxe_drop_ref(qp->resp.mr);
+    qp->resp.mr = NULL;
+  }
+}
+
 void __cleanup(struct rxe_qp *qp, struct rxe_pkt_info *pkt) {
 	struct sk_buff *skb;
 
@@ -30,10 +37,7 @@ void __cleanup(struct rxe_qp *qp, struct rxe_pkt_info *pkt) {
 		kfree_skb(skb);
 	}
 
-	if (qp->resp.mr) {
-		rxe_drop_ref(qp->resp.mr);
-		qp->resp.mr = NULL;
-	}
+    __cleanup_mem_ref(qp);
 }
 
 struct resp_res* __get_new_resource(struct rxe_qp* qp) {
