@@ -82,7 +82,6 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
     struct rxe_mem* mem = ic->qp->resp.mr;
 
     // can I get rid of these at some point?
-    ic->qp->resp.va = va;
     ic->qp->resp.rkey = rkey;
     ic->qp->resp.resid = resid;
 
@@ -111,7 +110,6 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
         // where does the ref to mem get dropped?
 	}
 
-	ic->qp->resp.va += data_len;
 	ic->qp->resp.resid -= data_len;
 
 	return INCOMING_OK;
@@ -130,7 +128,6 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
     struct rxe_mem* mem = ic->qp->resp.mr;
 
     // can I get rid of these at some point?
-    ic->qp->resp.va = va;
     ic->qp->resp.rkey = rkey;
     ic->qp->resp.resid = resid;
 
@@ -163,7 +160,6 @@ static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, s
     u32 resid = sizeof(u64);
 
     // can I get rid of these at some point?
-    ic->qp->resp.va = va;
     ic->qp->resp.rkey = rkey;
     ic->qp->resp.resid = resid;
 

@@ -213,7 +213,6 @@ struct rxe_resp_info {
 	struct rxe_recv_wqe	*wqe;
 
 	/* RDMA read / atomic only */
-	u64			va;
 	struct rxe_mem		*mr;
 	u32			resid;
 	u32			rkey;
