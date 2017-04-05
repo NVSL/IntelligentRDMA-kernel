@@ -83,9 +83,6 @@ int __send_packet_with_opcode(
   new_pkt.qp = qp;
   new_pkt.opcode = opcode_num;
   new_pkt.mask = rxe_opcode[opcode_num].mask;
-  //new_pkt.irdma_opnum = rxe_opcode[opcode_num].req.irdma_opnum;
-    // this is an 'ack' packet, so its req.irdma_opnum is invalid, and
-    // new_pkt's irdma_opnum shouldn't ever be touched either
   new_pkt.offset = req_pkt->offset;  // can I change this to rxe_opcode[opcode_num].offset?
   new_pkt.paylen = paylen;
 
