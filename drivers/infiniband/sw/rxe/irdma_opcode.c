@@ -82,7 +82,6 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
     struct rxe_mem* mem = ic->qp->resp.mr;
 
     // can I get rid of these at some point?
-    ic->qp->resp.rkey = rkey;
     ic->qp->resp.resid = resid;
 
     if(resid != 0) {
@@ -128,7 +127,6 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
     struct rxe_mem* mem = ic->qp->resp.mr;
 
     // can I get rid of these at some point?
-    ic->qp->resp.rkey = rkey;
     ic->qp->resp.resid = resid;
 
     if(resid != 0) {
@@ -160,7 +158,6 @@ static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, s
     u32 resid = sizeof(u64);
 
     // can I get rid of these at some point?
-    ic->qp->resp.rkey = rkey;
     ic->qp->resp.resid = resid;
 
     if(resid != 0) {

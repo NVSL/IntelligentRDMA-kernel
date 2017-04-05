@@ -55,7 +55,7 @@ int send_ack_packet_or_series(
     }
     res->read.length = payload->length;
     res->read.resid = payload->length;
-    res->read.rkey = ic->qp->resp.rkey;
+    res->read.rkey = reth_rkey(req_pkt);
       // read.rkey appears to only be used in handle_duplicate, where they ensure
       // the duplicate request has the same rkey as the old one.  Could we replace
       // that check in handle_duplicate with just the original rkey validation?
