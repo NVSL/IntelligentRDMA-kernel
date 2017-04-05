@@ -81,9 +81,6 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
     u32 pktlen = payload_size(pkt);
     struct rxe_mem* mem = ic->qp->resp.mr;
 
-    // can I get rid of these at some point?
-    ic->qp->resp.resid = resid;
-
     if(resid != 0) {
       // a zero-byte write is not required to do these steps
       mem = get_mem(ic, pkt, rkey, va, resid, IB_ACCESS_REMOTE_WRITE);
@@ -91,7 +88,6 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
 
       if(resid > mtu) {
         if(pktlen != mtu || bth_pad(pkt)) goto lengtherr;
-        ic->qp->resp.resid = mtu;
       } else {
         if(pktlen != resid) goto lengtherr;
         if((bth_pad(pkt) != (0x3 & (-resid)))) goto lengtherr;
@@ -109,8 +105,6 @@ static handle_incoming_status handle_incoming_write(struct irdma_context* ic, st
         // where does the ref to mem get dropped?
 	}
 
-	ic->qp->resp.resid -= data_len;
-
 	return INCOMING_OK;
 
 lengtherr:
@@ -125,9 +119,6 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
     u64 va = reth_va(pkt);
     u32 resid = reth_len(pkt);
     struct rxe_mem* mem = ic->qp->resp.mr;
-
-    // can I get rid of these at some point?
-    ic->qp->resp.resid = resid;
 
     if(resid != 0) {
       // a zero-byte read is not required to do these steps
@@ -156,9 +147,6 @@ static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, s
     u64 va = atmeth_va(pkt);
 	u64 *vaddr;
     u32 resid = sizeof(u64);
-
-    // can I get rid of these at some point?
-    ic->qp->resp.resid = resid;
 
     if(resid != 0) {
       // a zero-byte atomic op is not required to do these steps
