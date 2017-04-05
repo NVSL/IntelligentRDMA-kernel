@@ -352,7 +352,7 @@ enum ynb { YES, NO, BOTH };
 // A series of 2 packets would be 'start', 'end' omitting 'middle'.
 // Finally, for the instance where all your data fits in a single packet, we have the 'only' packet.
 // Arguments:
-//   *_opcode_num: the four opcode numbers you wish to register
+//   *_opcode_num: the four opcode numbers you wish to register (must be distinct)
 //   basename: basename for the opcodes; "_start" etc will be appended to form the individual names
 //     This means the basename must be max 56 characters, if immdt==NO and invalidate==NO;
 //     max 47 characters, if immdt==NO and invalidate==YES/BOTH;
@@ -422,8 +422,11 @@ enum ynb { YES, NO, BOTH };
 // returns:
 //   OPCODE_OK on success
 //   OPCODE_INVALID if:
-//     - any of the opcode_nums (the ones that are not ignored per the rules above) are outside allowed range
+//     - any of the opcode_nums (the ones that are not ignored per the rules above):
+//        - are outside allowed range
+//        - are not distinct
 //     - any of the (not-ignored) wr_opcode_nums:
+//        - are not distinct
 //        - have not been registered
 //        - were registered with register_loc_wr_opcode
 //        - were not registered as supporting this qpt
@@ -476,14 +479,16 @@ register_opcode_status register_single_ack_opcode(
 // Analogous to 'request' opcodes, we may also desire 'ack' opcode series. (For instance, if a response includes
 // a potentially large amount of data.)  This function is similar to register_req_opcode_series, but for 'ack's.
 // Arguments:
-//   *_opcode_num : the four opcode numbers you wish to register
+//   *_opcode_num : the four opcode numbers you wish to register (must be distinct)
 //   basename : basename for the opcodes; "_start" etc will be appended to form the individual names
 //     This means the basename must be max 56 characters.
 //   handle_incoming : see comments on register_single_ack_opcode.  Will apply to all four opcodes.
 //   atomicack : see comments on register_single_ack_opcode.  Will apply to all four opcodes.
 // returns:
 //   OPCODE_OK on success
-//   OPCODE_INVALID if any of the opcode_nums are outside allowed range or if 'basename' is too long
+//   OPCODE_INVALID if:
+//     - any of the opcode_nums are outside allowed range or not distinct
+//     - 'basename' is too long
 //   OPCODE_IN_USE if any of the opcode_nums were already in use
 //   In either of the error cases, the state when the function returns is guaranteed to be equivalent to
 //     the state as if the erroneous function call never happened - none of the new items will be registered.

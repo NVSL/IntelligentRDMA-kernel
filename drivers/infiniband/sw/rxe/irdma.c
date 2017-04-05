@@ -349,8 +349,6 @@ register_opcode_status register_req_opcode_series(
   enum ynb invalidate, unsigned end_opcode_num_inv, unsigned only_opcode_num_inv, unsigned wr_opcode_num_inv,
   bool requiresReceive, unsigned char perms, bool sched_priority, bool comp_swap
 ) {
-  // TODO: Here and in register_ack_opcode_series make sure that we're correctly handling the (error) case where
-  //   the user passes in duplicates among the (not-ignored) rxe_opcodes or (not-ignored) wr_opcodes
   register_opcode_status ret = OPCODE_OK;
   struct rxe_wr_opcode_info *wr_info = &rxe_wr_opcode_info[wr_opcode_num];
   struct rxe_wr_opcode_info *wr_info_immdt = &rxe_wr_opcode_info[wr_opcode_num_immdt];
