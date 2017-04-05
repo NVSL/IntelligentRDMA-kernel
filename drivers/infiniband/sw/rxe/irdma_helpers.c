@@ -1,6 +1,18 @@
 #include "irdma_helpers.h"
 #include "rxe_loc.h"
 
+struct rxe_mem* __get_mem(struct rxe_qp* qp, struct rxe_pkt_info* pkt, u32 rkey, u64 va, u32 resid, int access) {
+  struct rxe_mem* mem = lookup_mem(qp->pd, access, rkey, lookup_remote);
+  if(!mem) goto err1;
+  if(unlikely(mem->state == RXE_MEM_STATE_FREE)) goto err1;
+  if(mem_check_range(mem, va, resid)) goto err2;
+  return mem;
+err2:
+  rxe_drop_ref(mem);
+err1:
+  return NULL;
+}
+
 void __do_class_ac_error(struct rxe_qp* qp, u8 syndrome, enum ib_wc_status status) {
 	qp->resp.aeth_syndrome = syndrome;
 	qp->resp.status = status;

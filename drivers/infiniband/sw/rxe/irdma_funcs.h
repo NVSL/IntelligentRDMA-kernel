@@ -16,6 +16,8 @@ struct irdma_mem {
   u32 length;  // length in bytes
 };
 
+struct rxe_mem* get_mem(struct irdma_context* ic, struct rxe_pkt_info* pkt, u32 rkey, u64 va, u32 resid, int access);
+
 // Gets an existing 'resource' by psn, or NULL if not found
 struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn);
 

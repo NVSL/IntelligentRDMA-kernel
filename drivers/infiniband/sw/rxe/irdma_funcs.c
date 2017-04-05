@@ -2,6 +2,10 @@
 #include "irdma_helpers.h"
 #include "rxe_loc.h"
 
+struct rxe_mem* get_mem(struct irdma_context* ic, struct rxe_pkt_info* pkt, u32 rkey, u64 va, u32 resid, int access) {
+  return __get_mem(ic->qp, pkt, rkey, va, resid, access);
+}
+
 struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn) {
   int i;
   for(i = 0; i < ic->qp->attr.max_rd_atomic; i++) {

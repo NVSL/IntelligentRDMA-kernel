@@ -22,18 +22,6 @@ typedef enum {
 
 // ****************************
 // 'Helpers' used farther below
-static void build_rdma_network_hdr(union rdma_network_hdr *hdr,
-				   struct rxe_pkt_info *pkt)
-{
-	struct sk_buff *skb = PKT_TO_SKB(pkt);
-
-	memset(hdr, 0, sizeof(*hdr));
-	if (skb->protocol == htons(ETH_P_IP))
-		memcpy(&hdr->roce4grh, ip_hdr(skb), sizeof(hdr->roce4grh));
-	else if (skb->protocol == htons(ETH_P_IPV6))
-		memcpy(&hdr->ibgrh, ipv6_hdr(skb), sizeof(hdr->ibgrh));
-}
-
 static handle_incoming_status send_data_in(struct irdma_context *ic, void *data_addr,
 				     int data_len)
 {
@@ -66,9 +54,16 @@ static handle_incoming_status handle_incoming_send(struct irdma_context* ic, str
   if (qp_type(ic->qp) == IB_QPT_UD ||
       qp_type(ic->qp) == IB_QPT_SMI ||
       qp_type(ic->qp) == IB_QPT_GSI) {
-      union rdma_network_hdr hdr;
 
-      build_rdma_network_hdr(&hdr, pkt);
+      // build rdma network hdr
+      union rdma_network_hdr hdr;
+      struct sk_buff *skb = PKT_TO_SKB(pkt);
+
+      memset(&hdr, 0, sizeof(hdr));
+      if (skb->protocol == htons(ETH_P_IP))
+          memcpy(&hdr.roce4grh, ip_hdr(skb), sizeof(hdr.roce4grh));
+      else if (skb->protocol == htons(ETH_P_IPV6))
+          memcpy(&hdr.ibgrh, ipv6_hdr(skb), sizeof(hdr.ibgrh));
 
       err = send_data_in(ic, &hdr, sizeof(hdr));
       if (err) return err;
@@ -79,26 +74,80 @@ static handle_incoming_status handle_incoming_send(struct irdma_context* ic, str
 static handle_incoming_status handle_incoming_write(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
 	int	err;
 	int data_len = payload_size(pkt);
+    int mtu = ic->qp->mtu;
+    u32 rkey = reth_rkey(pkt);
+    u64 va = reth_va(pkt);
+    u32 resid = reth_len(pkt);
+    u32 pktlen = payload_size(pkt);
+    struct rxe_mem* mem = ic->qp->resp.mr;
 
-	err = rxe_mem_copy(ic->qp->resp.mr, ic->qp->resp.va, payload_addr(pkt),
+    // can I get rid of these at some point?
+    ic->qp->resp.va = va;
+    ic->qp->resp.rkey = rkey;
+    ic->qp->resp.resid = resid;
+
+    if(resid != 0) {
+      // a zero-byte write is not required to do these steps
+      mem = get_mem(ic, pkt, rkey, va, resid, IB_ACCESS_REMOTE_WRITE);
+      if(!mem) return INCOMING_ERROR_RKEY_VIOLATION;
+
+      if(resid > mtu) {
+        if(pktlen != mtu || bth_pad(pkt)) goto lengtherr;
+        ic->qp->resp.resid = mtu;
+      } else {
+        if(pktlen != resid) goto lengtherr;
+        if((bth_pad(pkt) != (0x3 & (-resid)))) goto lengtherr;
+          // "the above case may not be exactly that, but nothing else fits"
+      }
+      // can I get rid of these at some point?
+      WARN_ON(ic->qp->resp.mr);
+      ic->qp->resp.mr = mem;
+    }
+
+	err = rxe_mem_copy(mem, va, payload_addr(pkt),
 			   data_len, to_mem_obj, NULL);
 	if (err) {
 		return INCOMING_ERROR_RKEY_VIOLATION;
+        // where does the ref to mem get dropped?
 	}
 
 	ic->qp->resp.va += data_len;
 	ic->qp->resp.resid -= data_len;
 
 	return INCOMING_OK;
+
+lengtherr:
+    rxe_drop_ref(mem);
+    return INCOMING_ERROR_LENGTH;
 }
 
 static handle_incoming_status handle_incoming_read(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
     struct irdma_mem payload;
+
+    u32 rkey = reth_rkey(pkt);
+    u64 va = reth_va(pkt);
+    u32 resid = reth_len(pkt);
+    struct rxe_mem* mem = ic->qp->resp.mr;
+
+    // can I get rid of these at some point?
+    ic->qp->resp.va = va;
+    ic->qp->resp.rkey = rkey;
+    ic->qp->resp.resid = resid;
+
+    if(resid != 0) {
+      // a zero-byte read is not required to do these steps
+      mem = get_mem(ic, pkt, rkey, va, resid, IB_ACCESS_REMOTE_READ);
+      if(!mem) return INCOMING_ERROR_RKEY_VIOLATION;
+      // can I get rid of these at some point?
+      WARN_ON(ic->qp->resp.mr);
+      ic->qp->resp.mr = mem;
+    }
+
     // payload inherits the reference to mr from qp
-    payload.mr = ic->qp->resp.mr;
+    payload.mr = ic->qp->resp.mr;  // this is also 'mem' for us
     ic->qp->resp.mr = NULL;
-    payload.va = ic->qp->resp.va;
-    payload.length = ic->qp->resp.resid;
+    payload.va = va;
+    payload.length = resid;
 
     // this function inherits the reference to mr, so payload no longer has it
     if(send_ack_packet_or_series(ic, &payload, pkt, AETH_ACK_UNLIMITED, pkt->psn)) return INCOMING_ERROR_RNR;
@@ -107,15 +156,32 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
 }
 
 static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
-	u64 iova = atmeth_va(pkt);
-	u64 *vaddr;
-	struct rxe_mem *mr = ic->qp->resp.mr;
+	struct rxe_mem *mem = ic->qp->resp.mr;
 
-	if (mr->state != RXE_MEM_STATE_VALID) {
+    u32 rkey = atmeth_rkey(pkt);
+    u64 va = atmeth_va(pkt);
+	u64 *vaddr;
+    u32 resid = sizeof(u64);
+
+    // can I get rid of these at some point?
+    ic->qp->resp.va = va;
+    ic->qp->resp.rkey = rkey;
+    ic->qp->resp.resid = resid;
+
+    if(resid != 0) {
+      // a zero-byte atomic op is not required to do these steps
+      mem = get_mem(ic, pkt, rkey, va, resid, IB_ACCESS_REMOTE_ATOMIC);
+      if(!mem) return INCOMING_ERROR_RKEY_VIOLATION;
+      // can I get rid of these at some point?
+      WARN_ON(ic->qp->resp.mr);
+      ic->qp->resp.mr = mem;
+    }
+
+	if (mem->state != RXE_MEM_STATE_VALID) {
 		return INCOMING_ERROR_RKEY_VIOLATION;
 	}
 
-	vaddr = iova_to_vaddr(mr, iova, sizeof(u64));
+	vaddr = iova_to_vaddr(mem, va, resid);
 
 	/* check vaddr is 8 bytes aligned. */
 	if (!vaddr || (uintptr_t)vaddr & 7) {

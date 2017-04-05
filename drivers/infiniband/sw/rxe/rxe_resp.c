@@ -46,8 +46,6 @@ enum resp_states {
 	RESPST_CHK_OP_SEQ,
 	RESPST_CHK_OP_VALID,
 	RESPST_CHK_RESOURCE,
-	RESPST_CHK_LENGTH,
-	RESPST_CHK_RKEY,
 	RESPST_EXECUTE,
 	RESPST_COMPLETE,
 	RESPST_ACKNOWLEDGE,
@@ -75,8 +73,6 @@ static char *resp_state_name[] = {
 	[RESPST_CHK_OP_SEQ]			= "CHK_OP_SEQ",
 	[RESPST_CHK_OP_VALID]			= "CHK_OP_VALID",
 	[RESPST_CHK_RESOURCE]			= "CHK_RESOURCE",
-	[RESPST_CHK_LENGTH]			= "CHK_LENGTH",
-	[RESPST_CHK_RKEY]			= "CHK_RKEY",
 	[RESPST_EXECUTE]			= "EXECUTE",
 	[RESPST_COMPLETE]			= "COMPLETE",
 	[RESPST_ACKNOWLEDGE]			= "ACKNOWLEDGE",
@@ -295,7 +291,7 @@ static enum resp_states get_srq_wqe(struct rxe_qp *qp)
 	}
 
 	spin_unlock_bh(&srq->rq.consumer_lock);
-	return RESPST_CHK_LENGTH;
+	return RESPST_EXECUTE;
 
 event:
 	spin_unlock_bh(&srq->rq.consumer_lock);
@@ -303,7 +299,7 @@ event:
 	ev.element.srq = qp->ibqp.srq;
 	ev.event = IB_EVENT_SRQ_LIMIT_REACHED;
 	srq->ibsrq.event_handler(&ev, srq->ibsrq.srq_context);
-	return RESPST_CHK_LENGTH;
+	return RESPST_EXECUTE;
 }
 
 static enum resp_states check_resource(struct rxe_qp *qp,
@@ -338,10 +334,9 @@ static enum resp_states check_resource(struct rxe_qp *qp,
         //   that rd_atomic resources have been allocated; it doesn't check
         //   anything about how many are in use
 		if (likely(qp->attr.max_dest_rd_atomic > 0)) {
-			return RESPST_CHK_LENGTH;
+			return RESPST_EXECUTE;
         } else {
-            struct irdma_context ic = { qp };
-			do_class_ac_error(&ic, AETH_NAK_INVALID_REQ,
+			__do_class_ac_error(qp, AETH_NAK_INVALID_REQ,
 					  IB_WC_REM_INV_REQ_ERR);
             return RESPST_COMPLETE;
         }
@@ -352,116 +347,10 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 			return get_srq_wqe(qp);
 
 		qp->resp.wqe = queue_head(qp->rq.queue);
-		return (qp->resp.wqe) ? RESPST_CHK_LENGTH : RESPST_ERR_RNR;
+		return (qp->resp.wqe) ? RESPST_EXECUTE : RESPST_ERR_RNR;
 	}
 
-	return RESPST_CHK_LENGTH;
-}
-
-static enum resp_states check_length(struct rxe_qp *qp,
-				     struct rxe_pkt_info *pkt)
-{
-	switch (qp_type(qp)) {
-	case IB_QPT_RC:
-		return RESPST_CHK_RKEY;
-
-	case IB_QPT_UC:
-		return RESPST_CHK_RKEY;
-
-	default:
-		return RESPST_CHK_RKEY;
-	}
-}
-
-static enum resp_states check_rkey(struct rxe_qp *qp,
-				   struct rxe_pkt_info *pkt)
-{
-	struct rxe_mem *mem;
-	u64 va;
-	u32 rkey;
-	u32 resid;
-	u32 pktlen;
-	int mtu = qp->mtu;
-	enum resp_states state;
-	int access = rxe_opcode[pkt->opcode].req.perms;
-    if(!access) return RESPST_EXECUTE;
-      // If you have no required permissions then you don't get to perform
-      // any of the actions in the rest of this function
-
-	if (access & IRDMA_PERM_READ || access & IRDMA_PERM_WRITE) {
-		if (pkt->mask & RXE_RETH_MASK) {
-			qp->resp.va = reth_va(pkt);
-			qp->resp.rkey = reth_rkey(pkt);
-			qp->resp.resid = reth_len(pkt);
-		}
-	} else if (access & IRDMA_PERM_ATOMIC) {
-      // the 'else' in this seems to assume that we never have both
-      // ATOMIC and READ/WRITE.  This is true in existing code.
-      // In fact, I think that more than just this will break if this
-      // doesn't hold (see e.g. struct rxe_send_wr if I recall correctly)
-		qp->resp.va = atmeth_va(pkt);
-		qp->resp.rkey = atmeth_rkey(pkt);
-		qp->resp.resid = sizeof(u64);
-	}
-
-	/* A zero-byte op is not required to set an addr or rkey. */
-	if ( (pkt->mask & RXE_RETH_MASK) && reth_len(pkt) == 0 ) {
-		return RESPST_EXECUTE;
-	}
-
-	va	= qp->resp.va;
-	rkey	= qp->resp.rkey;
-	resid	= qp->resp.resid;
-	pktlen	= payload_size(pkt);
-
-	mem = lookup_mem(qp->pd, access, rkey, lookup_remote);
-	if (!mem) {
-		state = RESPST_ERR_RKEY_VIOLATION;
-		goto err1;
-	}
-
-	if (unlikely(mem->state == RXE_MEM_STATE_FREE)) {
-		state = RESPST_ERR_RKEY_VIOLATION;
-		goto err1;
-	}
-
-	if (mem_check_range(mem, va, resid)) {
-		state = RESPST_ERR_RKEY_VIOLATION;
-		goto err2;
-	}
-
-	if (access & IRDMA_PERM_WRITE)	 {
-		if (resid > mtu) {
-			if (pktlen != mtu || bth_pad(pkt)) {
-				state = RESPST_ERR_LENGTH;
-				goto err2;
-			}
-
-			qp->resp.resid = mtu;
-		} else {
-			if (pktlen != resid) {
-				state = RESPST_ERR_LENGTH;
-				goto err2;
-			}
-			if ((bth_pad(pkt) != (0x3 & (-resid)))) {
-				/* This case may not be exactly that
-				 * but nothing else fits.
-				 */
-				state = RESPST_ERR_LENGTH;
-				goto err2;
-			}
-		}
-	}
-
-	WARN_ON(qp->resp.mr);
-
-	qp->resp.mr = mem;
 	return RESPST_EXECUTE;
-
-err2:
-	rxe_drop_ref(mem);
-err1:
-	return state;
 }
 
 /* Executes a new request. A retried request never reach that function (send
@@ -732,12 +621,6 @@ int rxe_responder(void *arg)
 		case RESPST_CHK_RESOURCE:
 			state = check_resource(qp, pkt);
 			break;
-		case RESPST_CHK_LENGTH:
-			state = check_length(qp, pkt);
-			break;
-		case RESPST_CHK_RKEY:
-			state = check_rkey(qp, pkt);
-			break;
 		case RESPST_EXECUTE:
 			state = execute(qp, pkt);
 			break;
@@ -764,7 +647,7 @@ int rxe_responder(void *arg)
 		case RESPST_ERR_MISSING_OPCODE_LAST_C:
 		case RESPST_ERR_UNSUPPORTED_OPCODE:
 			/* RC Only - Class C. */
-			do_class_ac_error(&ic, AETH_NAK_INVALID_REQ,
+			__do_class_ac_error(qp, AETH_NAK_INVALID_REQ,
 					  IB_WC_REM_INV_REQ_ERR);
 			state = RESPST_COMPLETE;
 			break;
@@ -788,7 +671,7 @@ int rxe_responder(void *arg)
 		case RESPST_ERR_RKEY_VIOLATION:
 			if (qp_type(qp) == IB_QPT_RC) {
 				/* Class C */
-				do_class_ac_error(&ic, AETH_NAK_REM_ACC_ERR,
+				__do_class_ac_error(qp, AETH_NAK_REM_ACC_ERR,
 						  IB_WC_REM_ACCESS_ERR);
 				state = RESPST_COMPLETE;
 			} else {
@@ -807,7 +690,7 @@ int rxe_responder(void *arg)
 		case RESPST_ERR_LENGTH:
 			if (qp_type(qp) == IB_QPT_RC) {
 				/* Class C */
-				do_class_ac_error(&ic, AETH_NAK_INVALID_REQ,
+				__do_class_ac_error(qp, AETH_NAK_INVALID_REQ,
 						  IB_WC_REM_INV_REQ_ERR);
 				state = RESPST_COMPLETE;
 			} else if (qp->srq) {

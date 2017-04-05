@@ -10,6 +10,9 @@
 
 #include "irdma_funcs.h"
 
+// Returns NULL if the rkey doesn't check out
+struct rxe_mem* __get_mem(struct rxe_qp* qp, struct rxe_pkt_info* pkt, u32 rkey, u64 va, u32 resid, int access);
+
 // Process a class A or C error (both are treated the same in this implementation)
 void __do_class_ac_error(struct rxe_qp* qp, u8 syndrome, enum ib_wc_status status);
 

@@ -12,7 +12,8 @@ void irdma_init(void);
 // handle_incoming_status is the return type of the handle_incoming function for a 'req' opcode.
 typedef enum {
   INCOMING_OK = 0,  // indicates no error
-  INCOMING_ERROR_LENGTH,  // indicates that copy_data returned -ENOSPC
+  INCOMING_ERROR_LENGTH,  // indicates that copy_data returned -ENOSPC,
+                          // or that the payload was not the expected length
   INCOMING_ERROR_RKEY_VIOLATION,  // explanation TBD, but name seems straightforward
   INCOMING_ERROR_RNR,  // 'receiver not ready' - indicates that a required receive request was not posted
   INCOMING_ERROR_HANDLED,  // indicates that there was an error, but it has already been handled
