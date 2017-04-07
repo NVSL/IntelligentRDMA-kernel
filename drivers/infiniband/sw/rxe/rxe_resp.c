@@ -252,8 +252,10 @@ static enum resp_states check_op_valid(struct rxe_qp *qp,
         qp->resp.drop_msg = 1;
         return RESPST_CLEANUP;
       } else {
-        // do nothing
-        // Note this case unreachable in existing code - only RC and UC ops have required perms
+        // This case unreachable in existing code - only RC and UC ops have required perms
+        // Provisionally, I'll treat it like UC
+        qp->resp.drop_msg = 1;
+        return RESPST_CLEANUP;
       }
     }
 

@@ -4,7 +4,9 @@
 struct rxe_mem* __get_mem(struct rxe_qp* qp, struct rxe_pkt_info* pkt, u32 rkey, u64 va, u32 resid, int access) {
   struct rxe_mem* mem = lookup_mem(qp->pd, access, rkey, lookup_remote);
   if(!mem) goto err1;
-  if(unlikely(mem->state == RXE_MEM_STATE_FREE)) goto err1;
+  //if(unlikely(mem->state == RXE_MEM_STATE_FREE)) goto err1;
+    // the above literally cannot happen unless mem->state changes asynchronously
+    // because lookup_mem returns NULL unless mem->state is RXE_MEM_STATE_VALID
   if(mem_check_range(mem, va, resid)) goto err2;
   return mem;
 err2:
