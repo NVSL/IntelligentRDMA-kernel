@@ -154,7 +154,6 @@ static register_opcode_status __register_req_opcode(
   if(unlikely(immdt && invalidate)) return ARGUMENTS_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
-  if(unlikely(immdt && !requiresReceive)) return ARGUMENTS_INVALID;
   if(unlikely(immdt && !postComplete)) return ARGUMENTS_INVALID;
   if(unlikely(invalidate && !postComplete)) return ARGUMENTS_INVALID;
   if(unlikely(strlen(name) > 63)) return NAME_INVALID;
@@ -270,6 +269,7 @@ register_opcode_status register_single_req_opcode(
 ) {
   register_opcode_status st;
   struct rxe_opcode_group thisGroup;
+  bool immdt, inv, postComplete;
   struct rxe_wr_opcode_info *wr_info = &rxe_wr_opcode_info[wr_opcode_num];
   if(unlikely(!wr_info->name[0])) return OPCODE_REG_ERROR;
   if(unlikely(wr_info->type==LOCAL)) return OPCODE_REG_ERROR;
@@ -281,6 +281,11 @@ register_opcode_status register_single_req_opcode(
     //   just to preserve that information?  I wish I understood more about SMI / GSI and why they
     //   don't have opcodes (in rxe_opcode.c in the existing code).
   if(unlikely(is_registered(&wr_info->std.opcode_groups[qpt]))) return OPCODE_IN_USE;
+  immdt = wr_info->mask & WR_IMMDT_MASK;
+  inv = wr_info->mask & WR_INV_MASK;
+  postComplete = wr_info->mask & WR_COMP_MASK;
+  if(unlikely(immdt && !requiresReceive)) return ARGUMENTS_INVALID;
+    // the above line is a restriction for single_req_opcodes but not for all req_opcodes
   st = __register_req_opcode(
       opcode_num,
       name,
@@ -289,10 +294,10 @@ register_opcode_status register_single_req_opcode(
       handle_duplicate,
       wr_opcode_num,
       qpt,
-      /* immdt      = */ wr_info->mask & WR_IMMDT_MASK,
-      /* invalidate = */ wr_info->mask & WR_INV_MASK,
+      immdt,
+      inv,
       requiresReceive,
-      /* postComplete */ wr_info->mask & WR_COMP_MASK,
+      postComplete,
       perms, sched_priority, comp_swap,
       /* start     = */ true,   /* \                           */
       /* middle    = */ false,  /*  |--  (treat as an 'only')  */
