@@ -334,6 +334,13 @@ register_opcode_status register_single_ack_opcode(
   return st;
 }
 
+#define WITH_CHECK(expr, label) \
+  ret = expr; \
+  if(ret) { \
+    pr_err("Error %d with command " #expr "\n", ret); \
+    goto label; \
+  }
+
 register_opcode_status register_req_opcode_series(
   unsigned start_opcode_num,
   unsigned middle_opcode_num,
@@ -413,7 +420,8 @@ register_opcode_status register_req_opcode_series(
     strcat(endname_inv, "_end_with_inv");
     strcat(onlyname_inv, "_only_with_inv");
   }
-  ret = __register_req_opcode(
+
+  WITH_CHECK(__register_req_opcode(
       start_opcode_num, startname, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ false,
@@ -426,9 +434,8 @@ register_opcode_status register_req_opcode_series(
       /* start           = */ true,
       /* middle          = */ false,
       /* end             = */ false
-      );
-  if(ret) goto err0;
-  ret = __register_req_opcode(
+  ), err0)
+  WITH_CHECK(__register_req_opcode(
       middle_opcode_num, middlename, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ false,
@@ -441,9 +448,8 @@ register_opcode_status register_req_opcode_series(
       /* start           = */ false,
       /* middle          = */ true,
       /* end             = */ false
-      );
-  if(ret) goto err1;
-  ret = __register_req_opcode(
+  ), err1)
+  WITH_CHECK(__register_req_opcode(
       end_opcode_num, endname, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
@@ -456,9 +462,8 @@ register_opcode_status register_req_opcode_series(
       /* start           = */ false,
       /* middle          = */ false,
       /* end             = */ true
-      );
-  if(ret) goto err2;
-  ret = __register_req_opcode(
+  ), err2)
+  WITH_CHECK(__register_req_opcode(
       only_opcode_num, onlyname, irdma_req_opnum,
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
@@ -471,11 +476,10 @@ register_opcode_status register_req_opcode_series(
       /* start           = */ true,
       /* middle          = */ false,
       /* end             = */ true
-      );
-  if(ret) goto err3;
+  ), err3)
   if(immdt==BOTH) {
     bool postComplete_immdt = wr_info_immdt->mask & WR_COMP_MASK;  // always TRUE
-    ret = __register_req_opcode(
+    WITH_CHECK(__register_req_opcode(
         end_opcode_num_immdt, endname_immdt, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
@@ -488,9 +492,8 @@ register_opcode_status register_req_opcode_series(
         /* start           = */ false,
         /* middle          = */ false,
         /* end             = */ true
-      );
-    if(ret) goto err4;
-    ret = __register_req_opcode(
+    ), err4)
+    WITH_CHECK(__register_req_opcode(
         only_opcode_num_immdt, onlyname_immdt, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
@@ -503,15 +506,11 @@ register_opcode_status register_req_opcode_series(
         /* start           = */ true,
         /* middle          = */ false,
         /* end             = */ true
-        );
-    if(ret) {
-      __deregister_opcode(end_opcode_num_immdt);
-      goto err4;
-    }
+    ), err_immdt)
   }
   if(invalidate==BOTH) {
     bool postComplete_inv = wr_info_inv->mask & WR_COMP_MASK;  // always TRUE
-    ret = __register_req_opcode(
+    WITH_CHECK(__register_req_opcode(
         end_opcode_num_inv, endname_inv, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
@@ -524,9 +523,8 @@ register_opcode_status register_req_opcode_series(
         /* start           = */ false,
         /* middle          = */ false,
         /* end             = */ true
-        );
-    if(ret) goto err4;
-    ret = __register_req_opcode(
+    ), err4)
+    WITH_CHECK(__register_req_opcode(
         only_opcode_num_inv, onlyname_inv, irdma_req_opnum,
         handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
@@ -540,11 +538,7 @@ register_opcode_status register_req_opcode_series(
                                        // but I'm assuming that's an error/typo
         /* middle          = */ false,
         /* end             = */ true
-        );
-    if(ret) {
-      __deregister_opcode(end_opcode_num_inv);
-      goto err4;
-    }
+    ), err_inv)
   }
   // Successfully registered all req_opcodes.  Now register with the wr_opcodes
   // (and fill in containingGroup for the req_opcodes)
@@ -577,6 +571,12 @@ register_opcode_status register_req_opcode_series(
   }
   return ret;
 
+err_immdt:
+  __deregister_opcode(end_opcode_num_immdt);
+  goto err4;
+err_inv:
+  __deregister_opcode(end_opcode_num_inv);
+  goto err4;
 err4:
   __deregister_opcode(only_opcode_num);
 err3:
@@ -616,18 +616,14 @@ register_opcode_status register_ack_opcode_series(
   thisGroup.opcode_set.middle_opcode_num = middle_opcode_num;
   thisGroup.opcode_set.end_opcode_num = end_opcode_num;
   thisGroup.opcode_set.only_opcode_num = only_opcode_num;
-  ret = __register_ack_opcode(start_opcode_num, startname,
-      handle_incoming, atomicack, true, false, false);
-  if(ret) goto err0;
-  ret = __register_ack_opcode(middle_opcode_num, middlename,
-      handle_incoming, atomicack, false, true, false);
-  if(ret) goto err1;
-  ret = __register_ack_opcode(end_opcode_num, endname,
-      handle_incoming, atomicack, false, false, true);
-  if(ret) goto err2;
-  ret = __register_ack_opcode(only_opcode_num, onlyname,
-      handle_incoming, atomicack, true, false, true);
-  if(ret) goto err3;
+  WITH_CHECK(__register_ack_opcode(start_opcode_num, startname,
+      handle_incoming, atomicack, true, false, false), err0)
+  WITH_CHECK(__register_ack_opcode(middle_opcode_num, middlename,
+      handle_incoming, atomicack, false, true, false), err1)
+  WITH_CHECK(__register_ack_opcode(end_opcode_num, endname,
+      handle_incoming, atomicack, false, false, true), err2)
+  WITH_CHECK(__register_ack_opcode(only_opcode_num, onlyname,
+      handle_incoming, atomicack, true, false, true), err3)
   return ret;
 
 err3:
