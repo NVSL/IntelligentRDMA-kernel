@@ -109,7 +109,7 @@ unsigned series_id(struct rxe_opcode_group* opcode_group);
 bool is_registered(struct rxe_opcode_group* opcode_group);
 
 struct rxe_wr_opcode_info {
-	char			    *name;
+	char			    name[64];
 	enum rxe_wr_mask	mask;
     enum rxe_wr_type    type;
     union {
