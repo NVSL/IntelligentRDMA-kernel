@@ -279,21 +279,30 @@ static int rxe_init(struct rxe_dev *rxe)
 
     /* register 'built-in' opcodes */
     st = irdma_init_opcodes();
-    switch(st) {
-      case OPCODE_INVALID:
-        pr_err("irdma_init_opcodes() failed with OPCODE_INVALID\n");
-        err = -EINVAL;
-        goto err1;
-        break;
-      case OPCODE_IN_USE:
-        pr_err("irdma_init_opcodes() failed with OPCODE_IN_USE\n");
-        err = -EINVAL;
-        goto err1;
-        break;
-      case OPCODE_OK:
-        break;
-      default:
-        WARN_ON(1);  // unreachable
+    if(st) {
+      pr_err("irdma_init_opcodes() failed with ");
+      switch(st) {
+        case OPCODE_NUM_OUTSIDE_RANGE:
+          pr_cont("OPCODE_NUM_OUTSIDE_RANGE\n");
+          break;
+        case OPCODE_IN_USE:
+          pr_cont("OPCODE_IN_USE\n");
+          break;
+        case OPCODE_REG_ERROR:
+          pr_cont("OPCODE_REG_ERROR\n");
+          break;
+        case NAME_INVALID:
+          pr_cont("NAME_INVALID\n");
+          break;
+        case ARGUMENTS_INVALID:
+          pr_cont("ARGUMENTS_INVALID\n");
+          break;
+        default:
+          pr_cont("unidentified error\n");
+          break;
+      }
+      err = -EINVAL;
+      goto err1;
     }
 
 	err = rxe_init_ports(rxe);

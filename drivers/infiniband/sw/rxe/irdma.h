@@ -204,7 +204,14 @@ extern struct rxe_opcode_info rxe_opcode[IRDMA_MAX_RXE_OPCODES];
 #define IRDMA_PERM_ATOMIC (IB_ACCESS_REMOTE_ATOMIC)
 #define IRDMA_PERM_NONE (0)
 
-typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_status;
+typedef enum {
+  OPCODE_OK = 0,
+  OPCODE_NUM_OUTSIDE_RANGE,
+  OPCODE_IN_USE,
+  OPCODE_REG_ERROR,
+  NAME_INVALID,
+  ARGUMENTS_INVALID,
+} register_opcode_status;
 
 // Register a 'standard' work request opcode (wr_opcode).  'standard' wr's involve sending and/or
 //   receiving packets.  Compare with 'local' wr_opcodes (register_loc_wr_opcode()).
@@ -247,12 +254,13 @@ typedef enum { OPCODE_OK = 0, OPCODE_INVALID, OPCODE_IN_USE } register_opcode_st
 //     separately, and the ack_opcode_num does not affect the NAK process.
 // returns:
 //   OPCODE_OK on success
-//   OPCODE_INVALID if:
-//     - wr_opcode_num is outside allowed range
-//     - ack_opcode_num has not been registered, or was not registered as required above
-//     - the 'name' string is too long
-//     - the combination of arguments passed is invalid
+//   OPCODE_NUM_OUTSIDE_RANGE if wr_opcode_num is outside allowed range
 //   OPCODE_IN_USE if the desired wr_opcode_num is already in use
+//   OPCODE_REG_ERROR if:
+//     - ack_opcode_num has not been registered
+//     - ack_opcode_num was not registered as required above
+//   NAME_INVALID if the 'name' string is too long, or is ""
+//   ARGUMENTS_INVALID if the combination of arguments passed is invalid
 register_opcode_status register_std_wr_opcode(
     unsigned wr_opcode_num,
     char* name,
@@ -276,10 +284,9 @@ register_opcode_status register_std_wr_opcode(
 // wr_inline : allow (but not require) 'IB_SEND_INLINE' flag with wr's having this wr_opcode
 // returns:
 //   OPCODE_OK on success
-//   OPCODE_INVALID if:
-//     - wr_opcode_num is outside allowed range
-//     - the 'name' string is too long
+//   OPCODE_NUM_OUTSIDE_RANGE if wr_opcode_num is outside allowed range
 //   OPCODE_IN_USE if the desired wr_opcode_num is already in use
+//   NAME_INVALID if the 'name' string is too long, or is ""
 register_opcode_status register_loc_wr_opcode(
     unsigned wr_opcode_num,
     char* name,
@@ -319,17 +326,16 @@ register_opcode_status register_loc_wr_opcode(
 // comp_swap : set to TRUE for "compare-and-swap" atomic operations.  Better explanation TBD
 // returns :
 //   OPCODE_OK on success
-//   OPCODE_INVALID if:
-//     - opcode_num is outside allowed range
-//     - wr_opcode_num:
-//        - has not been registered
-//        - was registered with register_loc_wr_opcode
-//        - was not registered as supporting this qpt
-//     - the 'name' string is too long
-//     - the combination of arguments passed is invalid
+//   OPCODE_NUM_OUTSIDE_RANGE if opcode_num is outside allowed range
 //   OPCODE_IN_USE if:
 //     - the desired opcode_num is already in use
 //     - a different opcode_num was previously registered with the same wr_opcode_num and qpt
+//   OPCODE_REG_ERROR if:
+//     - wr_opcode_num has not been registered
+//     - wr_opcode_num was registered with register_loc_wr_opcode
+//     - wr_opcode_num was not registered as supporting this qpt
+//   NAME_INVALID if the 'name' string is too long, or is ""
+//   ARGUMENTS_INVALID if the combination of arguments passed is invalid
 register_opcode_status register_single_req_opcode(
     unsigned opcode_num,
     char* name,
@@ -421,23 +427,22 @@ enum ynb { YES, NO, BOTH };
 //   In particular, no series may carry both an immediate and an invalidate.
 // returns:
 //   OPCODE_OK on success
-//   OPCODE_INVALID if:
-//     - any of the opcode_nums (the ones that are not ignored per the rules above):
-//        - are outside allowed range
-//        - are not distinct
-//     - any of the (not-ignored) wr_opcode_nums:
-//        - are not distinct
-//        - have not been registered
-//        - were registered with register_loc_wr_opcode
-//        - were not registered as supporting this qpt
-//     - the 'basename' string is too long
-//     - the combination of arguments passed is invalid
+//   OPCODE_NUM_OUTSIDE_RANGE if any of the opcode_nums (the ones that are not ignored per the rules above)
+//     are outside allowed range
 //   OPCODE_IN_USE if:
 //     - any of the (not-ignored) opcode_nums were already in use
+//     - any of the (not-ignored) opcode_nums are not distinct
+//     - any of the (not-ignored) wr_opcode_nums are not distinct
 //     - any of the (not-ignored) wr_opcode_nums were previously used for a different req_opcode or
 //         req_opcode_series registration with the same qpt
-//   In either of the error cases, the state when the function returns is guaranteed to be equivalent to
-//     the state as if the erroneous function call never happened - none of the new items will be registered.
+//   OPCODE_REG_ERROR if any of the (not-ignored) wr_opcode_nums:
+//     - have not been registered
+//     - were registered with register_loc_wr_opcode
+//     - were not registered as supporting this qpt
+//   NAME_INVALID if the 'basename' string is too long, or is ""
+//   ARGUMENTS_INVALID if the combination of arguments passed is invalid
+// In any of the error cases, the state when the function returns is guaranteed to be equivalent to
+//   the state as if the erroneous function call never happened - none of the new items will be registered.
 register_opcode_status register_req_opcode_series(
     unsigned start_opcode_num,
     unsigned middle_opcode_num,
@@ -467,8 +472,9 @@ register_opcode_status register_req_opcode_series(
 // atomicack : set to TRUE iff the packet is an ack/response to an atomic operation
 // returns:
 //   OPCODE_OK on success
-//   OPCODE_INVALID if opcode_num is outside allowed range or if 'name' is too long
+//   OPCODE_NUM_OUTSIDE_RANGE if opcode_num is outside allowed range
 //   OPCODE_IN_USE if the desired opcode_num is already in use
+//   NAME_INVALID if the 'name' string is too long, or is ""
 register_opcode_status register_single_ack_opcode(
     unsigned opcode_num,
     char* name,
@@ -486,12 +492,11 @@ register_opcode_status register_single_ack_opcode(
 //   atomicack : see comments on register_single_ack_opcode.  Will apply to all four opcodes.
 // returns:
 //   OPCODE_OK on success
-//   OPCODE_INVALID if:
-//     - any of the opcode_nums are outside allowed range or not distinct
-//     - 'basename' is too long
-//   OPCODE_IN_USE if any of the opcode_nums were already in use
-//   In either of the error cases, the state when the function returns is guaranteed to be equivalent to
-//     the state as if the erroneous function call never happened - none of the new items will be registered.
+//   OPCODE_NUM_OUTSIDE_RANGE if any of the opcode_nums are outside allowed range
+//   OPCODE_IN_USE if any of the opcode_nums were already in use, or are not distinct
+//   NAME_INVALID if the 'basename' string is too long, or is ""
+// In any of the error cases, the state when the function returns is guaranteed to be equivalent to
+//   the state as if the erroneous function call never happened - none of the new items will be registered.
 register_opcode_status register_ack_opcode_series(
     unsigned start_opcode_num,
     unsigned middle_opcode_num,
