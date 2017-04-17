@@ -355,7 +355,7 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	if (err)
 		return err;
 
-	if (rxe_opcode[pkt->opcode].mask & IRDMA_PAYLOAD_MASK) {
+	if (rxe_wr_opcode_info[wqe->wr.opcode].mask & WR_PAYLOAD_MASK) {
 		if (wqe->wr.send_flags & IB_SEND_INLINE) {
 			u8 *tmp = &wqe->dma.inline_data[wqe->dma.sge_offset];
 
@@ -465,6 +465,7 @@ int rxe_requester(void *arg)
 	struct sk_buff *skb;
 	struct rxe_send_wqe *wqe;
 	enum rxe_hdr_mask mask;
+    enum rxe_wr_mask wr_mask;
 	int payload;
 	int mtu;
 	int opcode;
@@ -549,7 +550,8 @@ next_wqe:
 	}
 
 	mtu = get_mtu(qp, wqe);
-	payload = (mask & IRDMA_PAYLOAD_MASK) ? wqe->dma.resid : 0;
+    wr_mask = rxe_wr_opcode_info[wqe->wr.opcode].mask;
+	payload = (wr_mask & WR_PAYLOAD_MASK) ? wqe->dma.resid : 0;
 	if (payload > mtu) {
 		if (qp_type(qp) == IB_QPT_UD) {
 			/* C10-93.1.1: If the total sum of all the buffer lengths specified for a

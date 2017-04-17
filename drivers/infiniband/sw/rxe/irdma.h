@@ -77,8 +77,9 @@ enum rxe_wr_mask {
 	WR_WRITE_MASK = BIT(4),
     WR_IMMDT_MASK = BIT(5),
     WR_INV_MASK = BIT(6),
-    WR_SOLICITED_MASK = BIT(7),
-    WR_COMP_MASK = BIT(8),
+    WR_PAYLOAD_MASK = BIT(7),
+    WR_SOLICITED_MASK = BIT(8),
+    WR_COMP_MASK = BIT(9),
 };
 
 #define WR_MAX_QPT		(8)
@@ -166,8 +167,7 @@ enum rxe_hdr_mask {
 
     IRDMA_SCHED_PRIORITY_MASK = BIT(NUM_HDR_TYPES + 6),
     IRDMA_RES_MASK      = BIT(NUM_HDR_TYPES + 7),
-    IRDMA_PAYLOAD_MASK  = BIT(NUM_HDR_TYPES + 8),
-    IRDMA_COMPSWAP_MASK = BIT(NUM_HDR_TYPES + 9),
+    IRDMA_COMPSWAP_MASK = BIT(NUM_HDR_TYPES + 8),
 };
 
 #define OPCODE_NONE		(-1)
@@ -225,6 +225,10 @@ typedef enum {
 //   immediate value to the receiver
 // invalidate : whether the operation should (in addition to whatever else it does) 'invalidate'
 //   a remote memory region.  'immdt' and 'invalidate' cannot both be TRUE.
+// payload : whether the operation includes a 'payload' of data or not
+//   TODO: in future could this be indicated by rxe_send_wqe.dma != NULL on the individual send
+//   request, instead of by a flag on the wr?  It would be up to individual receiver functions
+//   to handle the presence or absence of a payload 'correctly' (however the user defines that).
 // wr_inline : allow (but not require) 'IB_SEND_INLINE' flag with wr's having this wr_opcode
 // alwaysEnableSolicited : the rules for whether to set the 'solicited' flag in the bth are
 //   confusing to me.  First of all, the flag is never set unless the user dynamically specifies
@@ -269,6 +273,7 @@ register_opcode_status register_std_wr_opcode(
     enum rxe_wr_mask type,
     bool immdt,
     bool invalidate,
+    bool payload,
     bool wr_inline,
     bool alwaysEnableSolicited,
     enum ib_wc_opcode sender_wc_opcode,
