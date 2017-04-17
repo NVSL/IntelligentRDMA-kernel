@@ -20,6 +20,12 @@ typedef enum {
 } IRDMA_REQ_OPNUM;
 #endif
 
+// Opcode numbers.  Ideally this is the only place they are defined, and outside code
+// is completely agnostic to them.
+#define IRDMA_WR_CUSTOM (0x10)
+#define IRDMA_OPCODE_CUSTOM_REQ (0x18)
+#define IRDMA_OPCODE_CUSTOM_ACK (0x19)
+
 // ****************************
 // 'Helpers' used farther below
 static handle_incoming_status send_data_in(struct irdma_context *ic, void *data_addr,
@@ -140,6 +146,13 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
     return INCOMING_OK;
 }
 
+static handle_incoming_status handle_incoming_custom(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+    int raw_payload[] = {5};
+    struct irdma_mem payload = {NULL, (u64)(raw_payload), sizeof(int)};
+    if(send_ack_packet_or_series(ic, &payload, pkt, AETH_ACK_UNLIMITED, pkt->psn)) return INCOMING_ERROR_RNR;
+    return INCOMING_OK;
+}
+
 static handle_incoming_status handle_incoming_atomic(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
 	struct rxe_mem *mem = ic->qp->resp.mr;
 
@@ -226,6 +239,11 @@ static handle_duplicate_status handle_duplicate_read(struct irdma_context* ic, s
   }
 }
 
+static handle_duplicate_status handle_duplicate_custom(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  pr_warn("Duplicate custom-opcode received\n");
+  return HANDLED;
+}
+
 static handle_duplicate_status handle_duplicate_atomic(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
   // Find the operation in our list of responder resources.
   struct resp_res *res = get_existing_resource(ic, pkt->psn);
@@ -277,6 +295,11 @@ static handle_ack_status handle_incoming_sendorwrite_ack(struct irdma_context* i
     return ACK_COMPLETE;
   else
     return ACK_NEXT;
+}
+
+static handle_ack_status handle_incoming_custom_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
+  pr_warn("Received value %i in custom ack\n", *(int*)payload_addr(pkt));
+  return ACK_COMPLETE;
 }
 
 // ****************************
@@ -338,6 +361,12 @@ register_opcode_status irdma_init_opcodes(void) {
       IB_OPCODE_RC_RDMA_READ_RESPONSE_ONLY,
       "IB_OPCODE_RC_RDMA_READ_RESPONSE",
       /*.handle_incoming  = */ &handle_incoming_read_ack,
+      /*.atomicack       = */ false
+  ))
+  WITH_CHECK(register_single_ack_opcode(
+      IRDMA_OPCODE_CUSTOM_ACK,
+      "IRDMA_OPCODE_CUSTOM_ACK",
+      /*.handle_incoming  = */ &handle_incoming_custom_ack,
       /*.atomicack       = */ false
   ))
 
@@ -442,6 +471,17 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ true,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
+  WITH_CHECK(register_std_wr_opcode(IRDMA_WR_CUSTOM, "IRDMA_WR_CUSTOM",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_READ_MASK,  // TODO not correct at all, wrong behavior in certain places
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
+        /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
+        /* sender_wc_opcode   = */ IB_WC_RDMA_READ,
+        /* postComplete       = */ false,
+        /* receiver_wc_opcode = */ IB_WC_RECV,
+        /* ack_opcode_num = */ IRDMA_OPCODE_CUSTOM_ACK))
   WITH_CHECK(register_loc_wr_opcode(IB_WR_REG_MR, "IB_WR_REG_MR",
         /* handle_wr      = */ &handle_wr_reg_mr,
         /* wr_inline      = */ false))
@@ -535,6 +575,19 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_ATOMIC,
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
+  ))
+  WITH_CHECK(register_single_req_opcode(
+      IRDMA_OPCODE_CUSTOM_REQ,
+      "IRDMA_OPCODE_CUSTOM_REQ",
+      /*.irdma_req_opnum  = */ IRDMA_REQ_SEND,
+      /*.handle_incoming  = */ &handle_incoming_custom,
+      /*.handle_duplicate = */ &handle_duplicate_custom,
+      /*.wr_opcode_num   = */ IRDMA_WR_CUSTOM,
+      /*.qpt             = */ IB_QPT_RC,
+      /*.requiresReceive = */ false,
+      /*.perms           = */ IRDMA_PERM_NONE,
       /*.sched_priority  = */ false,
       /*.comp_swap       = */ false
   ))
