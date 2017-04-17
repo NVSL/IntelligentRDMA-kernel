@@ -65,6 +65,7 @@ int send_ack_packet_or_series(
       // but only sometimes, depending on whether it's a series ack or not
     res->read.aeth_syndrome = syndrome;
     // res inherits the reference to mr from payload
+    // or if payload is local, then this is just NULL anyway, and read.mr==NULL also indicates local
     res->read.mr = payload->mr;
     payload->mr = NULL;
     ic->qp->resp.res = res;  // this signals 'series send in progress' to rxe_responder

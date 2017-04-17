@@ -1,5 +1,6 @@
 #include "irdma_helpers.h"
 #include "rxe_loc.h"
+#include <linux/crc32.h>
 
 struct rxe_mem* __get_mem(struct rxe_qp* qp, struct rxe_pkt_info* pkt, u32 rkey, u64 va, u32 resid, int access) {
   struct rxe_mem* mem = lookup_mem(qp->pd, access, rkey, lookup_remote);
@@ -114,8 +115,13 @@ int __send_packet_with_opcode(
   }
 
   if(payload) {
-    err = rxe_mem_copy(payload->mr, payload->va, payload_addr(&new_pkt), payload->length, from_mem_obj, &crc);
-    if(err) pr_err("Failed copying memory\n");  // but for some reason, keep going
+    if(payload->mr) {
+      err = rxe_mem_copy(payload->mr, payload->va, payload_addr(&new_pkt), payload->length, from_mem_obj, &crc);
+      if(err) pr_err("Failed copying memory\n");  // but for some reason, keep going
+    } else {
+      memcpy(payload_addr(&new_pkt), (void*)(payload->va), payload->length);
+      crc = crc32_le(crc, (void*)(payload->va), payload->length);
+    }
     p = payload_addr(&new_pkt) + payload->length + bth_pad(&new_pkt);
   } else {
     p = payload_addr(&new_pkt) + bth_pad(&new_pkt);

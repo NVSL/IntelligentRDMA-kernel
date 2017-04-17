@@ -11,8 +11,9 @@ struct rxe_mem;
 // Functions available to user-defined handle_funcs, to be used in the course of handling an incoming packet.
 
 struct irdma_mem {
-  struct rxe_mem* mr;
-  u64 va;
+  struct rxe_mem* mr;  // memory region.  Alternately, NULL, in which case 'va' must be local
+                       // i.e. address of some memory allocated in kernel
+  u64 va;  // address
   u32 length;  // length in bytes
 };
 
