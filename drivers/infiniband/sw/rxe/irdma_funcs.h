@@ -22,6 +22,10 @@ struct rxe_mem* get_mem(struct irdma_context* ic, struct rxe_pkt_info* pkt, u32 
 // Gets an existing 'resource' by psn, or NULL if not found
 struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn);
 
+// Copies the data at 'addr' with length 'len' into the location specified by the given dma
+// Returns 0 on success, nonzero on error
+int copy_to_dma_loc(struct irdma_context* ic, struct rxe_dma_info* dma, void* addr, int len);
+
 // Sends an 'ack' packet or series in response to received 'req' packet
 // payload : payload for the packet or series, can be NULL for no payload
 // req_pkt : the 'req' packet you're responding to (the one passed to your handle_func)

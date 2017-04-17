@@ -32,10 +32,8 @@ static handle_incoming_status send_data_in(struct irdma_context *ic, void *data_
 				     int data_len)
 {
 	int err;
-	struct rxe_dev *rxe = to_rdev(ic->qp->ibqp.device);
 
-	err = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE, &ic->qp->resp.wqe->dma,
-			data_addr, data_len, to_mem_obj, NULL);
+    err = copy_to_dma_loc(ic, &ic->qp->resp.wqe->dma, data_addr, data_len);
 	if (unlikely(err)) {
       if(err == -ENOSPC) {
         return INCOMING_ERROR_LENGTH;
@@ -259,13 +257,7 @@ static handle_duplicate_status handle_duplicate_atomic(struct irdma_context* ic,
 // ****************************
 // handle_incoming funcs for 'ack' opcodes
 static handle_ack_status handle_incoming_read_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
-  struct rxe_dev *rxe = to_rdev(ic->qp->ibqp.device);
-  int ret;
-
-  ret = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE,
-          &wqe->dma, payload_addr(pkt),
-          payload_size(pkt), to_mem_obj, NULL);
-  if (ret) return ACK_ERROR;
+  if(copy_to_dma_loc(ic, &wqe->dma, payload_addr(pkt), payload_size(pkt))) return ACK_ERROR;
 
   if(wqe->dma.resid == 0 && (pkt->mask & RXE_END_MASK))
     return ACK_COMPLETE;
@@ -274,15 +266,9 @@ static handle_ack_status handle_incoming_read_ack(struct irdma_context* ic, stru
 }
 
 static handle_ack_status handle_incoming_atomic_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
-  struct rxe_dev *rxe = to_rdev(ic->qp->ibqp.device);
-  int ret;
-
   u64 atomic_orig = atmack_orig(pkt);
 
-  ret = copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE,
-          &wqe->dma, &atomic_orig,
-          sizeof(u64), to_mem_obj, NULL);
-  if (ret) return ACK_ERROR;
+  if(copy_to_dma_loc(ic, &wqe->dma, &atomic_orig, sizeof(u64))) return ACK_ERROR;
 
   if(wqe->dma.resid == 0 && (pkt->mask & RXE_END_MASK))
     return ACK_COMPLETE;
@@ -298,7 +284,7 @@ static handle_ack_status handle_incoming_sendorwrite_ack(struct irdma_context* i
 }
 
 static handle_ack_status handle_incoming_custom_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
-  pr_warn("Received value %i in custom ack\n", *(int*)payload_addr(pkt));
+  if(copy_to_dma_loc(ic, &wqe->dma, payload_addr(pkt), payload_size(pkt))) return ACK_ERROR;
   return ACK_COMPLETE;
 }
 

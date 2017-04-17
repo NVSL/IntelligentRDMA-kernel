@@ -19,6 +19,11 @@ struct resp_res* get_existing_resource(struct irdma_context* ic, u32 psn) {
   return NULL;
 }
 
+int copy_to_dma_loc(struct irdma_context* ic, struct rxe_dma_info* dma, void* addr, int len) {
+  struct rxe_dev* rxe = to_rdev(ic->qp->ibqp.device);
+  return copy_data(rxe, ic->qp->pd, IB_ACCESS_LOCAL_WRITE, dma, addr, len, to_mem_obj, NULL);
+}
+
 int send_ack_packet_or_series(
     struct irdma_context* ic,
     struct irdma_mem* payload,
