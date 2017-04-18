@@ -805,7 +805,7 @@ static int rxe_post_send_kernel(struct rxe_qp *qp, struct ib_send_wr *wr,
 	int must_sched;
 
 	while (wr) {
-		mask = wr_opcode_mask(wr->opcode, qp);
+		mask = rxe_wr_opcode_info[wr->opcode].mask;
 		if (unlikely(!mask)) {
 			err = -EINVAL;
 			*bad_wr = wr;

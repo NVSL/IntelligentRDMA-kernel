@@ -82,8 +82,9 @@ static void req_retry(struct rxe_qp *qp)
 	for (wqe_index = consumer_index(qp->sq.queue);
 		wqe_index != producer_index(qp->sq.queue);
 		wqe_index = next_index(qp->sq.queue, wqe_index)) {
+
 		wqe = addr_from_index(qp->sq.queue, wqe_index);
-		mask = wr_opcode_mask(wqe->wr.opcode, qp);
+		mask = rxe_wr_opcode_info[wqe->wr.opcode].mask;
 
 		if (wqe->state == wqe_state_posted)
 			break;
@@ -183,7 +184,7 @@ static struct rxe_send_wqe *req_next_wqe(struct rxe_qp *qp)
 		return NULL;
 	}
 
-	wqe->mask = wr_opcode_mask(wqe->wr.opcode, qp);
+	wqe->mask = rxe_wr_opcode_info[wqe->wr.opcode].mask;
 	return wqe;
 }
 
