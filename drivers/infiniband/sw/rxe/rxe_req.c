@@ -494,7 +494,7 @@ next_wqe:
 		goto exit;
 
     // ensure the wr_opcode is registered
-    if(!rxe_wr_opcode_info[wqe->wr.opcode].name[0]) goto exit;
+    if(!isWrOpcodeRegistered(wqe->wr.opcode)) goto exit;
 
     // handle type==LOCAL wr_opcodes specially
 	if (rxe_wr_opcode_info[wqe->wr.opcode].type == LOCAL) {

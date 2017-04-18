@@ -174,6 +174,14 @@ extern struct rxe_wr_opcode_info rxe_wr_opcode_info[IRDMA_MAX_WR_OPCODES];
 #define IRDMA_MAX_RXE_OPCODES 256
 extern struct rxe_opcode_info rxe_opcode[IRDMA_MAX_RXE_OPCODES];
 
+static inline bool isWrOpcodeRegistered(unsigned wr_opcode) {
+  return rxe_wr_opcode_info[wr_opcode].name[0] != '\0';
+}
+
+static inline bool isRxeOpcodeRegistered(unsigned opcode) {
+  return rxe_opcode[opcode].name[0] != '\0';
+}
+
 #define IRDMA_PERM_READ (IB_ACCESS_REMOTE_READ)
 #define IRDMA_PERM_WRITE (IB_ACCESS_REMOTE_WRITE)
 #define IRDMA_PERM_ATOMIC (IB_ACCESS_REMOTE_ATOMIC)

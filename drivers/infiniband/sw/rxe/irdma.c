@@ -37,10 +37,10 @@ register_opcode_status register_std_wr_opcode(
   if(wr_opcode_num >= IRDMA_MAX_WR_OPCODES) return OPCODE_NUM_OUTSIDE_RANGE;
   if(strlen(name) > 63) return NAME_INVALID;
   if(!name[0]) return NAME_INVALID;
-  if(info->name[0]) return OPCODE_IN_USE;  // name=="" indicates free
+  if(isWrOpcodeRegistered(wr_opcode_num)) return OPCODE_IN_USE;
   if(immdt && !postComplete) return ARGUMENTS_INVALID;
   if(invalidate && !postComplete) return ARGUMENTS_INVALID;
-  if(!ack_opcode_info.name[0]) return OPCODE_REG_ERROR;
+  if(!isRxeOpcodeRegistered(ack_opcode_num)) return OPCODE_REG_ERROR;
   if(!ack_opcode_info.is_ack) return OPCODE_REG_ERROR;
   if(unlikely(immdt && invalidate)) return ARGUMENTS_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it
@@ -85,7 +85,7 @@ register_opcode_status register_loc_wr_opcode(
   if(wr_opcode_num >= IRDMA_MAX_WR_OPCODES) return OPCODE_NUM_OUTSIDE_RANGE;
   if(strlen(name) > 63) return NAME_INVALID;
   if(!name[0]) return NAME_INVALID;
-  if(info->name[0]) return OPCODE_IN_USE;  // name=="" indicates free
+  if(isWrOpcodeRegistered(wr_opcode_num)) return OPCODE_IN_USE;
   strcpy(info->name, name);
   info->type = LOCAL;
   info->mask = (wr_inline ? WR_INLINE_MASK : 0);
@@ -152,7 +152,7 @@ static register_opcode_status __register_req_opcode(
   if(unlikely(opcode_num >= IRDMA_MAX_RXE_OPCODES)) return OPCODE_NUM_OUTSIDE_RANGE;
   if(unlikely(opcode_num == 0)) return OPCODE_NUM_OUTSIDE_RANGE;
   if(unlikely(!name[0])) return NAME_INVALID;
-  if(unlikely(info->name[0])) return OPCODE_IN_USE;  // name=="" indicates free
+  if(unlikely(isRxeOpcodeRegistered(opcode_num))) return OPCODE_IN_USE;
   if(unlikely(immdt && invalidate)) return ARGUMENTS_INVALID;
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
@@ -223,7 +223,7 @@ static register_opcode_status __register_ack_opcode(
   if(unlikely(opcode_num >= IRDMA_MAX_RXE_OPCODES)) return OPCODE_NUM_OUTSIDE_RANGE;
   if(unlikely(opcode_num == 0)) return OPCODE_NUM_OUTSIDE_RANGE;
   if(unlikely(!name[0])) return NAME_INVALID;
-  if(unlikely(info->name[0])) return OPCODE_IN_USE;  // name=="" indicates free
+  if(unlikely(isRxeOpcodeRegistered(opcode_num))) return OPCODE_IN_USE;
   if(unlikely(strlen(name) > 63)) return NAME_INVALID;
   mask =
     // see comments on __register_req_opcode for fuller explanation of mask bits
@@ -262,7 +262,7 @@ register_opcode_status register_single_req_opcode(
   struct rxe_opcode_group thisGroup;
   bool immdt, inv, reth, atmeth, postComplete;
   struct rxe_wr_opcode_info *wr_info = &rxe_wr_opcode_info[wr_opcode_num];
-  if(unlikely(!wr_info->name[0])) return OPCODE_REG_ERROR;
+  if(unlikely(!isWrOpcodeRegistered(wr_opcode_num))) return OPCODE_REG_ERROR;
   if(unlikely(wr_info->type==LOCAL)) return OPCODE_REG_ERROR;
   if(unlikely(!wr_info->std.qpts[qpt])) return OPCODE_REG_ERROR;
     // More elegant would be, don't make the user declare supported qpts when registering wr_opcode,
@@ -373,7 +373,7 @@ register_opcode_status register_req_opcode_series(
   if(unlikely(immdt!=NO && len > 45)) return NAME_INVALID;
   if(unlikely(immdt==YES && invalidate!=NO)) return ARGUMENTS_INVALID;
   if(unlikely(invalidate==YES && immdt!=NO)) return ARGUMENTS_INVALID;
-  if(unlikely(!wr_info->name[0])) return OPCODE_REG_ERROR;
+  if(unlikely(!isWrOpcodeRegistered(wr_opcode_num))) return OPCODE_REG_ERROR;
   if(unlikely(wr_info->type==LOCAL)) return OPCODE_REG_ERROR;
   if(unlikely(!wr_info->std.qpts[qpt])) return OPCODE_REG_ERROR;
   if(unlikely(is_registered(opcode_group))) return OPCODE_IN_USE;
@@ -382,7 +382,7 @@ register_opcode_status register_req_opcode_series(
   if(unlikely((!(wr_info->mask & WR_IMMDT_MASK)) && immdt==YES)) return ARGUMENTS_INVALID;
   if(unlikely((!(wr_info->mask & WR_INV_MASK)) && invalidate==YES)) return ARGUMENTS_INVALID;
   if(immdt==BOTH) {
-    if(unlikely(!wr_info_immdt->name[0])) return OPCODE_REG_ERROR;
+    if(unlikely(!isWrOpcodeRegistered(wr_opcode_num_immdt))) return OPCODE_REG_ERROR;
     if(unlikely(wr_info_immdt->type==LOCAL)) return OPCODE_REG_ERROR;
     if(unlikely(!wr_info_immdt->std.qpts[qpt])) return OPCODE_REG_ERROR;
     if(unlikely((wr_info_immdt->mask & WR_RETH_MASK) != reth)) return OPCODE_REG_ERROR;
@@ -391,7 +391,7 @@ register_opcode_status register_req_opcode_series(
     if(unlikely(!(wr_info_immdt->mask & WR_IMMDT_MASK))) return ARGUMENTS_INVALID;
   }
   if(invalidate==BOTH) {
-    if(unlikely(!wr_info_inv->name[0])) return OPCODE_REG_ERROR;
+    if(unlikely(!isWrOpcodeRegistered(wr_opcode_num_inv))) return OPCODE_REG_ERROR;
     if(unlikely(wr_info_inv->type==LOCAL)) return OPCODE_REG_ERROR;
     if(unlikely(!wr_info_inv->std.qpts[qpt])) return OPCODE_REG_ERROR;
     if(unlikely((wr_info_inv->mask & WR_RETH_MASK) != reth)) return OPCODE_REG_ERROR;
