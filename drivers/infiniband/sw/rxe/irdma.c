@@ -15,6 +15,12 @@ bool is_registered(struct rxe_opcode_group* opcode_group) {
                                       // marking things registered
 }
 
+#define ERRIF(cond, err) \
+  if(unlikely(cond)) { \
+    pr_err("error: condition failed: (" #cond "); returning error " #err "\n"); \
+    return err; \
+  }
+
 register_opcode_status register_std_wr_opcode(
     unsigned wr_opcode_num,
     char* name,
@@ -34,15 +40,15 @@ register_opcode_status register_std_wr_opcode(
   unsigned i;
   struct rxe_wr_opcode_info *info = &rxe_wr_opcode_info[wr_opcode_num];
   struct rxe_opcode_info ack_opcode_info = rxe_opcode[ack_opcode_num];
-  if(wr_opcode_num >= IRDMA_MAX_WR_OPCODES) return OPCODE_NUM_OUTSIDE_RANGE;
-  if(strlen(name) > 63) return NAME_INVALID;
-  if(!name[0]) return NAME_INVALID;
-  if(isWrOpcodeRegistered(wr_opcode_num)) return OPCODE_IN_USE;
-  if(immdt && !postComplete) return ARGUMENTS_INVALID;
-  if(invalidate && !postComplete) return ARGUMENTS_INVALID;
-  if(!isRxeOpcodeRegistered(ack_opcode_num)) return OPCODE_REG_ERROR;
-  if(!ack_opcode_info.is_ack) return OPCODE_REG_ERROR;
-  if(unlikely(immdt && invalidate)) return ARGUMENTS_INVALID;
+  ERRIF(wr_opcode_num >= IRDMA_MAX_WR_OPCODES, OPCODE_NUM_OUTSIDE_RANGE)
+  ERRIF(strlen(name) > 63, NAME_INVALID)
+  ERRIF(!name[0], NAME_INVALID)
+  ERRIF(isWrOpcodeRegistered(wr_opcode_num), OPCODE_IN_USE)
+  ERRIF(immdt && !postComplete, ARGUMENTS_INVALID)
+  ERRIF(invalidate && !postComplete, ARGUMENTS_INVALID)
+  ERRIF(!isRxeOpcodeRegistered(ack_opcode_num), OPCODE_REG_ERROR)
+  ERRIF(!ack_opcode_info.is_ack, OPCODE_REG_ERROR)
+  ERRIF(immdt && invalidate, ARGUMENTS_INVALID)
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it
     // can't be allowed in the existing implementation due to, e.g., the definition of the ib_wc
     // or rxe_send_wr structs (probably among other things)
@@ -82,10 +88,10 @@ register_opcode_status register_loc_wr_opcode(
     bool wr_inline
 ) {
   struct rxe_wr_opcode_info *info = &rxe_wr_opcode_info[wr_opcode_num];
-  if(wr_opcode_num >= IRDMA_MAX_WR_OPCODES) return OPCODE_NUM_OUTSIDE_RANGE;
-  if(strlen(name) > 63) return NAME_INVALID;
-  if(!name[0]) return NAME_INVALID;
-  if(isWrOpcodeRegistered(wr_opcode_num)) return OPCODE_IN_USE;
+  ERRIF(wr_opcode_num >= IRDMA_MAX_WR_OPCODES, OPCODE_NUM_OUTSIDE_RANGE)
+  ERRIF(strlen(name) > 63, NAME_INVALID)
+  ERRIF(!name[0], NAME_INVALID)
+  ERRIF(isWrOpcodeRegistered(wr_opcode_num), OPCODE_IN_USE)
   strcpy(info->name, name);
   info->type = LOCAL;
   info->mask = (wr_inline ? WR_INLINE_MASK : 0);
@@ -149,16 +155,16 @@ static register_opcode_status __register_req_opcode(
 ) {
   enum rxe_hdr_mask mask;
   struct rxe_opcode_info *info = &rxe_opcode[opcode_num];
-  if(unlikely(opcode_num >= IRDMA_MAX_RXE_OPCODES)) return OPCODE_NUM_OUTSIDE_RANGE;
-  if(unlikely(opcode_num == 0)) return OPCODE_NUM_OUTSIDE_RANGE;
-  if(unlikely(!name[0])) return NAME_INVALID;
-  if(unlikely(isRxeOpcodeRegistered(opcode_num))) return OPCODE_IN_USE;
-  if(unlikely(immdt && invalidate)) return ARGUMENTS_INVALID;
+  ERRIF(opcode_num >= IRDMA_MAX_RXE_OPCODES, OPCODE_NUM_OUTSIDE_RANGE)
+  ERRIF(opcode_num == 0, OPCODE_NUM_OUTSIDE_RANGE)
+  ERRIF(!name[0], NAME_INVALID)
+  ERRIF(isRxeOpcodeRegistered(opcode_num), OPCODE_IN_USE)
+  ERRIF(immdt && invalidate, ARGUMENTS_INVALID)
     // although conceptually there's no problem with immdt && invalidate (as far as I know), it can't
     // be allowed in the existing implementation due to, e.g., the definition of the ib_wc struct
-  if(unlikely(immdt && !postComplete)) return ARGUMENTS_INVALID;
-  if(unlikely(invalidate && !postComplete)) return ARGUMENTS_INVALID;
-  if(unlikely(strlen(name) > 63)) return NAME_INVALID;
+  ERRIF(immdt && !postComplete, ARGUMENTS_INVALID)
+  ERRIF(invalidate && !postComplete, ARGUMENTS_INVALID)
+  ERRIF(strlen(name) > 63, NAME_INVALID)
 #define SET_IF(cond, set_what) \
   ( (cond) ? (set_what) : 0 )
   mask =
@@ -220,11 +226,11 @@ static register_opcode_status __register_ack_opcode(
 ) {
   enum rxe_hdr_mask mask;
   struct rxe_opcode_info *info = &rxe_opcode[opcode_num];
-  if(unlikely(opcode_num >= IRDMA_MAX_RXE_OPCODES)) return OPCODE_NUM_OUTSIDE_RANGE;
-  if(unlikely(opcode_num == 0)) return OPCODE_NUM_OUTSIDE_RANGE;
-  if(unlikely(!name[0])) return NAME_INVALID;
-  if(unlikely(isRxeOpcodeRegistered(opcode_num))) return OPCODE_IN_USE;
-  if(unlikely(strlen(name) > 63)) return NAME_INVALID;
+  ERRIF(opcode_num >= IRDMA_MAX_RXE_OPCODES, OPCODE_NUM_OUTSIDE_RANGE)
+  ERRIF(opcode_num == 0, OPCODE_NUM_OUTSIDE_RANGE)
+  ERRIF(!name[0], NAME_INVALID)
+  ERRIF(isRxeOpcodeRegistered(opcode_num), OPCODE_IN_USE)
+  ERRIF(strlen(name) > 63, NAME_INVALID)
   mask =
     // see comments on __register_req_opcode for fuller explanation of mask bits
       SET_IF(start, RXE_START_MASK)
@@ -262,16 +268,16 @@ register_opcode_status register_single_req_opcode(
   struct rxe_opcode_group thisGroup;
   bool immdt, inv, reth, atmeth, postComplete;
   struct rxe_wr_opcode_info *wr_info = &rxe_wr_opcode_info[wr_opcode_num];
-  if(unlikely(!isWrOpcodeRegistered(wr_opcode_num))) return OPCODE_REG_ERROR;
-  if(unlikely(wr_info->type==LOCAL)) return OPCODE_REG_ERROR;
-  if(unlikely(!wr_info->std.qpts[qpt])) return OPCODE_REG_ERROR;
+  ERRIF(!isWrOpcodeRegistered(wr_opcode_num), OPCODE_REG_ERROR)
+  ERRIF(wr_info->type==LOCAL, OPCODE_REG_ERROR)
+  ERRIF(!wr_info->std.qpts[qpt], OPCODE_REG_ERROR)
     // More elegant would be, don't make the user declare supported qpts when registering wr_opcode,
     //   and instead just assume that qpts with registered opcodes are supported, and without are not
     //   However, the existing code marks some wr_opcodes as compatible with IB_QPT_SMI and IB_QPT_GSI,
     //   and others not; and doesn't register opcodes for SMI or GSI.  So we kind of have to keep this,
     //   just to preserve that information?  I wish I understood more about SMI / GSI and why they
     //   don't have opcodes (in rxe_opcode.c in the existing code).
-  if(unlikely(is_registered(&wr_info->std.opcode_groups[qpt]))) return OPCODE_IN_USE;
+  ERRIF(is_registered(&wr_info->std.opcode_groups[qpt]), OPCODE_IN_USE)
   immdt = wr_info->mask & WR_IMMDT_MASK;
   inv = wr_info->mask & WR_INV_MASK;
   reth = wr_info->mask & WR_RETH_MASK;
@@ -368,36 +374,36 @@ register_opcode_status register_req_opcode_series(
   bool atmeth = wr_info->mask & WR_ATMETH_MASK;
   char startname[64], middlename[64], endname[64], onlyname[64];
   char endname_immdt[64], onlyname_immdt[64], endname_inv[64], onlyname_inv[64];
-  if(unlikely(len > 56 || len == 0)) return NAME_INVALID;
-  if(unlikely(invalidate!=NO && len > 47)) return NAME_INVALID;
-  if(unlikely(immdt!=NO && len > 45)) return NAME_INVALID;
-  if(unlikely(immdt==YES && invalidate!=NO)) return ARGUMENTS_INVALID;
-  if(unlikely(invalidate==YES && immdt!=NO)) return ARGUMENTS_INVALID;
-  if(unlikely(!isWrOpcodeRegistered(wr_opcode_num))) return OPCODE_REG_ERROR;
-  if(unlikely(wr_info->type==LOCAL)) return OPCODE_REG_ERROR;
-  if(unlikely(!wr_info->std.qpts[qpt])) return OPCODE_REG_ERROR;
-  if(unlikely(is_registered(opcode_group))) return OPCODE_IN_USE;
-  if(unlikely((wr_info->mask & WR_IMMDT_MASK) && immdt!=YES)) return ARGUMENTS_INVALID;
-  if(unlikely((wr_info->mask & WR_INV_MASK) && invalidate!=YES)) return ARGUMENTS_INVALID;
-  if(unlikely((!(wr_info->mask & WR_IMMDT_MASK)) && immdt==YES)) return ARGUMENTS_INVALID;
-  if(unlikely((!(wr_info->mask & WR_INV_MASK)) && invalidate==YES)) return ARGUMENTS_INVALID;
+  ERRIF(len > 56 || len == 0, NAME_INVALID)
+  ERRIF(invalidate!=NO && len > 47, NAME_INVALID)
+  ERRIF(immdt!=NO && len > 45, NAME_INVALID)
+  ERRIF(immdt==YES && invalidate!=NO, ARGUMENTS_INVALID)
+  ERRIF(invalidate==YES && immdt!=NO, ARGUMENTS_INVALID)
+  ERRIF(!isWrOpcodeRegistered(wr_opcode_num), OPCODE_REG_ERROR)
+  ERRIF(wr_info->type==LOCAL, OPCODE_REG_ERROR)
+  ERRIF(!wr_info->std.qpts[qpt], OPCODE_REG_ERROR)
+  ERRIF(is_registered(opcode_group), OPCODE_IN_USE)
+  ERRIF((wr_info->mask & WR_IMMDT_MASK) && immdt!=YES, ARGUMENTS_INVALID)
+  ERRIF((wr_info->mask & WR_INV_MASK) && invalidate!=YES, ARGUMENTS_INVALID)
+  ERRIF((!(wr_info->mask & WR_IMMDT_MASK)) && immdt==YES, ARGUMENTS_INVALID)
+  ERRIF((!(wr_info->mask & WR_INV_MASK)) && invalidate==YES, ARGUMENTS_INVALID)
   if(immdt==BOTH) {
-    if(unlikely(!isWrOpcodeRegistered(wr_opcode_num_immdt))) return OPCODE_REG_ERROR;
-    if(unlikely(wr_info_immdt->type==LOCAL)) return OPCODE_REG_ERROR;
-    if(unlikely(!wr_info_immdt->std.qpts[qpt])) return OPCODE_REG_ERROR;
-    if(unlikely((wr_info_immdt->mask & WR_RETH_MASK) != reth)) return OPCODE_REG_ERROR;
-    if(unlikely((wr_info_immdt->mask & WR_ATMETH_MASK) != atmeth)) return OPCODE_REG_ERROR;
-    if(unlikely(is_registered(opcode_group_immdt))) return OPCODE_IN_USE;
-    if(unlikely(!(wr_info_immdt->mask & WR_IMMDT_MASK))) return ARGUMENTS_INVALID;
+    ERRIF(!isWrOpcodeRegistered(wr_opcode_num_immdt), OPCODE_REG_ERROR)
+    ERRIF(wr_info_immdt->type==LOCAL, OPCODE_REG_ERROR)
+    ERRIF(!wr_info_immdt->std.qpts[qpt], OPCODE_REG_ERROR)
+    ERRIF((wr_info_immdt->mask & WR_RETH_MASK) != reth, OPCODE_REG_ERROR)
+    ERRIF((wr_info_immdt->mask & WR_ATMETH_MASK) != atmeth, OPCODE_REG_ERROR)
+    ERRIF(is_registered(opcode_group_immdt), OPCODE_IN_USE)
+    ERRIF(!(wr_info_immdt->mask & WR_IMMDT_MASK), ARGUMENTS_INVALID)
   }
   if(invalidate==BOTH) {
-    if(unlikely(!isWrOpcodeRegistered(wr_opcode_num_inv))) return OPCODE_REG_ERROR;
-    if(unlikely(wr_info_inv->type==LOCAL)) return OPCODE_REG_ERROR;
-    if(unlikely(!wr_info_inv->std.qpts[qpt])) return OPCODE_REG_ERROR;
-    if(unlikely((wr_info_inv->mask & WR_RETH_MASK) != reth)) return OPCODE_REG_ERROR;
-    if(unlikely((wr_info_inv->mask & WR_ATMETH_MASK) != atmeth)) return OPCODE_REG_ERROR;
-    if(unlikely(is_registered(opcode_group_inv))) return OPCODE_IN_USE;
-    if(unlikely(!(wr_info_inv->mask & WR_INV_MASK))) return ARGUMENTS_INVALID;
+    ERRIF(!isWrOpcodeRegistered(wr_opcode_num_inv), OPCODE_REG_ERROR)
+    ERRIF(wr_info_inv->type==LOCAL, OPCODE_REG_ERROR)
+    ERRIF(!wr_info_inv->std.qpts[qpt], OPCODE_REG_ERROR)
+    ERRIF((wr_info_inv->mask & WR_RETH_MASK) != reth, OPCODE_REG_ERROR)
+    ERRIF((wr_info_inv->mask & WR_ATMETH_MASK) != atmeth, OPCODE_REG_ERROR)
+    ERRIF(is_registered(opcode_group_inv), OPCODE_IN_USE)
+    ERRIF(!(wr_info_inv->mask & WR_INV_MASK), ARGUMENTS_INVALID)
   }
   strcpy(startname, basename);
   strcpy(middlename, basename);
@@ -624,7 +630,7 @@ register_opcode_status register_ack_opcode_series(
   size_t len = strlen(basename);
   char startname[64], middlename[64], endname[64], onlyname[64];
   struct rxe_opcode_group thisGroup;
-  if(unlikely(len > 56 || len == 0)) return NAME_INVALID;
+  ERRIF(len > 56 || len == 0, NAME_INVALID)
   strcpy(startname, basename);
   strcpy(middlename, basename);
   strcpy(endname, basename);
