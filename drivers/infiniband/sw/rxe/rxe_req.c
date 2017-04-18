@@ -40,37 +40,13 @@
 static int next_opcode(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 		       u32 opcode);
 
-static inline void retry_first_write_send(struct rxe_qp *qp,
-					  struct rxe_send_wqe *wqe,
-					  unsigned mask, int npsn)
-{
-	int i;
-
-	for (i = 0; i < npsn; i++) {
-		int to_send = (wqe->dma.resid > qp->mtu) ?
-				qp->mtu : wqe->dma.resid;
-
-		qp->req.opcode = next_opcode(qp, wqe,
-					     wqe->wr.opcode);
-
-		if (wqe->wr.send_flags & IB_SEND_INLINE) {
-			wqe->dma.resid -= to_send;
-			wqe->dma.sge_offset += to_send;
-		} else {
-			advance_dma_data(&wqe->dma, to_send);
-		}
-		if (mask & WR_WRITE_MASK)
-			wqe->iova += qp->mtu;
-	}
-}
-
 static void req_retry(struct rxe_qp *qp)
 {
 	struct rxe_send_wqe *wqe;
 	unsigned int wqe_index;
-	unsigned int mask;
+	unsigned int wr_mask;
 	int npsn;
-	int first = 1;
+	bool first = true;
 
 	wqe = queue_head(qp->sq.queue);
 	npsn = (qp->comp.psn - wqe->first_psn) & BTH_PSN_MASK;
@@ -84,7 +60,7 @@ static void req_retry(struct rxe_qp *qp)
 		wqe_index = next_index(qp->sq.queue, wqe_index)) {
 
 		wqe = addr_from_index(qp->sq.queue, wqe_index);
-		mask = rxe_wr_opcode_info[wqe->wr.opcode].mask;
+		wr_mask = rxe_wr_opcode_info[wqe->wr.opcode].mask;
 
 		if (wqe->state == wqe_state_posted)
 			break;
@@ -92,25 +68,44 @@ static void req_retry(struct rxe_qp *qp)
 		if (wqe->state == wqe_state_done)
 			continue;
 
-		wqe->iova = (mask & WR_ATOMIC_MASK) ?
+		wqe->iova = (wr_mask & WR_ATMETH_MASK) ?
 			     wqe->wr.wr.atomic.remote_addr :
-			     (mask & WR_READ_MASK || mask & WR_WRITE_MASK) ?
+			     (wr_mask & WR_RETH_MASK) ?
 			     wqe->wr.wr.rdma.remote_addr :
 			     0;
 
-		if (!first || (mask & WR_READ_MASK) == 0) {
+		if (!first ||
+            /* in existing code, the below fired for non-'read' wr's only.
+               I'm gambling that it should fire whenever the 'ack'
+               for the wr is not a series */
+            (!rxe_wr_opcode_info[wqe->wr.opcode].std.ack_opcode_group.is_series)) {
 			wqe->dma.resid = wqe->dma.length;
 			wqe->dma.cur_sge = 0;
 			wqe->dma.sge_offset = 0;
 		}
 
 		if (first) {
-			first = 0;
+			first = false;
 
-			if (mask & WR_WRITE_MASK || mask & WR_SEND_MASK)
-				retry_first_write_send(qp, wqe, mask, npsn);
+			if (wr_mask & WR_PAYLOAD_MASK) {
+              int i;
+              for (i = 0; i < npsn; i++) {
+                int to_send = (wqe->dma.resid > qp->mtu) ?
+                        qp->mtu : wqe->dma.resid;
 
-			if (mask & WR_READ_MASK)
+                qp->req.opcode = next_opcode(qp, wqe,
+                                 wqe->wr.opcode);
+
+                if (wqe->wr.send_flags & IB_SEND_INLINE) {
+                    wqe->dma.resid -= to_send;
+                    wqe->dma.sge_offset += to_send;
+                } else {
+                    advance_dma_data(&wqe->dma, to_send);
+                }
+              }
+            }
+
+			if (wr_mask & WR_RETH_MASK)
 				wqe->iova += npsn * qp->mtu;
 		}
 

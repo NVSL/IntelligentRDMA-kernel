@@ -48,17 +48,13 @@ struct irdma_context {
 
 enum rxe_wr_mask {
 	WR_INLINE_MASK = BIT(0),
-	WR_ATOMIC_MASK = BIT(1),
-	WR_SEND_MASK = BIT(2),
-	WR_READ_MASK = BIT(3),
-	WR_WRITE_MASK = BIT(4),
-    WR_IMMDT_MASK = BIT(5),
-    WR_INV_MASK = BIT(6),
-    WR_PAYLOAD_MASK = BIT(7),
-    WR_SOLICITED_MASK = BIT(8),
-    WR_COMP_MASK = BIT(9),
-    WR_RETH_MASK = BIT(10),
-    WR_ATMETH_MASK = BIT(11),
+    WR_IMMDT_MASK = BIT(1),
+    WR_INV_MASK = BIT(2),
+    WR_PAYLOAD_MASK = BIT(3),
+    WR_SOLICITED_MASK = BIT(4),
+    WR_COMP_MASK = BIT(5),
+    WR_RETH_MASK = BIT(6),
+    WR_ATMETH_MASK = BIT(7),
 };
 
 #define WR_MAX_QPT		(8)
@@ -198,8 +194,6 @@ typedef enum {
 // name : a name for the wr_opcode (max 63 characters, cannot be "")
 // qpts : pointer to array of qp types this wr_opcode is compatible with
 // num_qpts : length of the qpts array (number of compatible qp types)
-// type : one of WR_SEND_MASK, WR_WRITE_MASK, WR_READ_MASK, or WR_ATOMIC_MASK
-//   Better explanation TBD
 // immdt : whether the operation should (in addition to whatever else it does) present an
 //   immediate value to the receiver
 // invalidate : whether the operation should (in addition to whatever else it does) 'invalidate'
@@ -208,6 +202,8 @@ typedef enum {
 //   TODO: in future could this be indicated by rxe_send_wqe.dma != NULL on the individual send
 //   request, instead of by a flag on the wr?  It would be up to individual receiver functions
 //   to handle the presence or absence of a payload 'correctly' (however the user defines that).
+//   TODO: alternately, on the 'ack' side I've chosen to let this be implied, in that 'series'
+//   acks have payloads and single acks do not.  This seems reasonable and could apply to reqs too.
 // remaddr : whether the operation should include a remote address (including rkey) specified
 //   by the sender.  More formally, whether the operation's first (or only) packet should include
 //   an 'RDMA extended transport header'.  This option is ignored if atomic==TRUE.
@@ -256,7 +252,6 @@ register_opcode_status register_std_wr_opcode(
     char* name,
     enum ib_qp_type* qpts,
     unsigned num_qpts,
-    enum rxe_wr_mask type,
     bool immdt,
     bool invalidate,
     bool payload,

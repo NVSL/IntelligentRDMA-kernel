@@ -169,15 +169,22 @@ static inline enum comp_state check_psn(struct rxe_qp *qp,
 					struct rxe_send_wqe *wqe)
 {
 	s32 diff;
+    struct rxe_opcode_group ack_group = rxe_wr_opcode_info[wqe->wr.opcode].std.ack_opcode_group;
+    // these types of acks we must explicitly get responses
+    // in existing code it was all read responses and atomic responses; I've generalized to
+    // 'responses containing important info' i.e. atomic acks or acks with payloads
+    // and I've tested for "with payload" as "is a series ack" which I believe to be fine
+    bool cant_implicit_ack =
+      /* series ack */ ack_group.is_series
+      || /* atomic ack */ rxe_opcode[ack_group.opcode_num].mask & RXE_ATMACK_MASK;
 
 	/* check to see if response is past the oldest WQE. if it is, complete
-	 * send/write or error read/atomic
+	 * (if we can implicit ack) or error (if we can't)
 	 */
 	diff = psn_compare(pkt->psn, wqe->last_psn);
 	if (diff > 0) {
 		if (wqe->state == wqe_state_pending) {
-			if (wqe->mask & WR_ATOMIC_MASK || wqe->mask & WR_READ_MASK)
-				return COMPST_ERROR_RETRY;
+			if (cant_implicit_ack) return COMPST_ERROR_RETRY;
 
 			reset_retry_counters(qp);
 			return COMPST_COMP_WQE;
@@ -196,7 +203,10 @@ static inline enum comp_state check_psn(struct rxe_qp *qp,
 			return COMPST_COMP_ACK;
 		else
 			return COMPST_DONE;
-	} else if ((diff > 0) && (wqe->mask & WR_ATOMIC_MASK || wqe->mask & WR_READ_MASK)) {
+	} else if ((diff > 0) && cant_implicit_ack) {
+        // received an ack for a newer wr
+        // but still waiting for a response to a wqe that we can't implicit ack
+        // so drop the received ack
 		return COMPST_DONE;
 	} else {
 		return COMPST_CHECK_ACK;

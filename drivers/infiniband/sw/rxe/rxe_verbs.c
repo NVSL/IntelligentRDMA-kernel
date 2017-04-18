@@ -638,7 +638,8 @@ static int validate_send_wr(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 	if (unlikely(num_sge > sq->max_sge))
 		goto err1;
 
-	if (unlikely(mask & WR_ATOMIC_MASK)) {
+	if (unlikely(mask & WR_ATMETH_MASK)) {
+        // atomic wr's must have payload exactly 64 bytes
 		if (length < 8)
 			goto err1;
 
@@ -675,15 +676,10 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 		wr->wr.ud.remote_qkey = ud_wr(ibwr)->remote_qkey;
 		if (qp_type(qp) == IB_QPT_GSI)
           wr->wr.ud.pkey_index = ud_wr(ibwr)->pkey_index;
-	} else if(wr_info->mask & WR_READ_MASK
-              || wr_info->mask & WR_WRITE_MASK) {
-        // more to the point, "if any packet in series has RXE_RETH_MASK"
+	} else if(wr_info->mask & WR_RETH_MASK) {
         wr->wr.rdma.remote_addr = rdma_wr(ibwr)->remote_addr;
         wr->wr.rdma.rkey	= rdma_wr(ibwr)->rkey;
-    } else if(wr_info->mask & WR_SEND_MASK) {
-        // do nothing
-    } else if(wr_info->mask & WR_ATOMIC_MASK) {
-        // more to the point, "if any packet in series has RXE_ATMETH_MASK"
+    } else if(wr_info->mask & WR_ATMETH_MASK) {
         wr->wr.atomic.remote_addr =
             atomic_wr(ibwr)->remote_addr;
         wr->wr.atomic.compare_add =
@@ -739,7 +735,7 @@ static int init_send_wqe(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 		memcpy(wqe->dma.sge, ibwr->sg_list,
 		       num_sge * sizeof(struct ib_sge));
 
-	wqe->iova		= (mask & WR_ATOMIC_MASK) ?
+	wqe->iova		= (mask & WR_ATMETH_MASK) ?
 					atomic_wr(ibwr)->remote_addr :
 					rdma_wr(ibwr)->remote_addr;
 	wqe->mask		= mask;

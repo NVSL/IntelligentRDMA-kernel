@@ -20,7 +20,6 @@ register_opcode_status register_std_wr_opcode(
     char* name,
     enum ib_qp_type* qpts,
     unsigned num_qpts,
-    enum rxe_wr_mask type,
     bool immdt,
     bool invalidate,
     bool payload,
@@ -39,9 +38,6 @@ register_opcode_status register_std_wr_opcode(
   if(strlen(name) > 63) return NAME_INVALID;
   if(!name[0]) return NAME_INVALID;
   if(info->name[0]) return OPCODE_IN_USE;  // name=="" indicates free
-  if(type & ~(WR_SEND_MASK | WR_WRITE_MASK | WR_READ_MASK | WR_ATOMIC_MASK)) return ARGUMENTS_INVALID;
-    // the above line enforces that you can only send one of those four bits
-    // (or combinations of, I guess) as 'type'
   if(immdt && !postComplete) return ARGUMENTS_INVALID;
   if(invalidate && !postComplete) return ARGUMENTS_INVALID;
   if(!ack_opcode_info.name[0]) return OPCODE_REG_ERROR;
@@ -70,7 +66,7 @@ register_opcode_status register_std_wr_opcode(
     | (atomic ? WR_ATMETH_MASK : 0)
     | (postComplete ? WR_COMP_MASK : 0)
     | (alwaysEnableSolicited ? WR_SOLICITED_MASK : 0)
-    | type;
+  ;
   for(i = 0; i < WR_MAX_QPT; i++) info->std.qpts[i] = false;
   for(i = 0; i < num_qpts; i++) info->std.qpts[qpts[i]] = true;
   info->std.sender_wc_opcode = sender_wc_opcode;
