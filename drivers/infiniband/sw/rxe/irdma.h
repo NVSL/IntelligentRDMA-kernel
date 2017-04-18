@@ -324,6 +324,8 @@ register_opcode_status register_loc_wr_opcode(
 //   (see also irdma_funcs.h)
 // handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
 //   (see also irdma_funcs.h)
+// res : whether the handle_incoming and/or handle_duplicate functions need "responder resources"
+//   to be available on the receive side
 // wr_opcode_num : the number of the wr_opcode for this opcode
 //   (previously registered with register_*std*_wr_opcode)
 //   Each wr_opcode can only have one req_opcode (or req_opcode_series) per qpt; you can't
@@ -358,6 +360,7 @@ register_opcode_status register_single_req_opcode(
     IRDMA_REQ_OPNUM irdma_req_opnum,
     handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
+    bool res,
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     bool requiresReceive, unsigned char perms, bool sched_priority, bool comp_swap
@@ -382,6 +385,7 @@ enum ynb { YES, NO, BOTH };
 //   irdma_req_opnum: see comments on register_single_req_opcode.  Will apply to all four opcodes.
 //   handle_incoming: see comments on register_single_req_opcode.  Will apply to all four opcodes.
 //   handle_duplicate: see comments on register_single_req_opcode.  Will apply to all four opcodes.
+//   res: see comments on register_single_req_opcode.  Will apply to all four opcodes.
 //   wr_opcode_num: the number of the wr_opcode for these opcodes (will apply to all four opcodes)
 //     (previously registered with register_*std*_wr_opcode)
 //     Each wr_opcode can only have one req_opcode_series (or single req_opcode) per qpt; you can't
@@ -470,6 +474,7 @@ register_opcode_status register_req_opcode_series(
     IRDMA_REQ_OPNUM irdma_req_opnum,
     handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
+    bool res,
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,

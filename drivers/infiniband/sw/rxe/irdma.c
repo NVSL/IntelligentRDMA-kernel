@@ -145,6 +145,7 @@ static register_opcode_status __register_req_opcode(
     IRDMA_REQ_OPNUM irdma_req_opnum,
     handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
+    bool res,
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
     bool immdt, bool invalidate, bool reth, bool atmeth,
@@ -185,6 +186,7 @@ static register_opcode_status __register_req_opcode(
     | SET_IF(comp_swap, IRDMA_COMPSWAP_MASK)
     | SET_IF(reth, RXE_RETH_MASK)
     | SET_IF(atmeth, RXE_ATMETH_MASK)
+    | SET_IF(res, IRDMA_RES_MASK)
         // RXE_AETH_MASK indicates whether the packet needs an 'ack extended transport header'.
         // This is not the case for any 'request' packets.
     | SET_IF(false, RXE_AETH_MASK)
@@ -199,9 +201,6 @@ static register_opcode_status __register_req_opcode(
         // RXE_DETH_MASK indicates whether the packet needs a 'datagram extended transport header'.
         // The rule here reflects existing convention.
     | SET_IF((false /*qpt == IB_QPT_RD*/ || qpt == IB_QPT_UD), RXE_DETH_MASK)
-        // I invented IRDMA_RES_MASK to indicate which packets need "responder resources" available
-        // on the receive side.  The rule here reflects existing convention.
-    | SET_IF(irdma_req_opnum == IRDMA_REQ_READ || irdma_req_opnum == IRDMA_REQ_ATOMIC, IRDMA_RES_MASK)
   ;
   strcpy(info->name, name);
   info->mask = mask;
@@ -260,6 +259,7 @@ register_opcode_status register_single_req_opcode(
   IRDMA_REQ_OPNUM irdma_req_opnum,
   handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
   handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
+  bool res,
   unsigned wr_opcode_num,
   enum ib_qp_type qpt,
   bool requiresReceive, unsigned char perms, bool sched_priority, bool comp_swap
@@ -291,6 +291,7 @@ register_opcode_status register_single_req_opcode(
       irdma_req_opnum,
       handle_incoming,
       handle_duplicate,
+      res,
       wr_opcode_num,
       qpt,
       immdt,
@@ -356,6 +357,7 @@ register_opcode_status register_req_opcode_series(
   IRDMA_REQ_OPNUM irdma_req_opnum,
   handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
   handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
+  bool res,
   unsigned wr_opcode_num,
   enum ib_qp_type qpt,
   enum ynb immdt, unsigned end_opcode_num_immdt, unsigned only_opcode_num_immdt, unsigned wr_opcode_num_immdt,
@@ -435,7 +437,7 @@ register_opcode_status register_req_opcode_series(
 
   WITH_CHECK(__register_req_opcode(
       start_opcode_num, startname, irdma_req_opnum,
-      handle_incoming, handle_duplicate, wr_opcode_num, qpt,
+      handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
       /* reth            = */ reth,
@@ -451,7 +453,7 @@ register_opcode_status register_req_opcode_series(
   ), err0)
   WITH_CHECK(__register_req_opcode(
       middle_opcode_num, middlename, irdma_req_opnum,
-      handle_incoming, handle_duplicate, wr_opcode_num, qpt,
+      handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
       /* reth            = */ false,
@@ -467,7 +469,7 @@ register_opcode_status register_req_opcode_series(
   ), err1)
   WITH_CHECK(__register_req_opcode(
       end_opcode_num, endname, irdma_req_opnum,
-      handle_incoming, handle_duplicate, wr_opcode_num, qpt,
+      handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
       /* reth            = */ false,
@@ -483,7 +485,7 @@ register_opcode_status register_req_opcode_series(
   ), err2)
   WITH_CHECK(__register_req_opcode(
       only_opcode_num, onlyname, irdma_req_opnum,
-      handle_incoming, handle_duplicate, wr_opcode_num, qpt,
+      handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
       /* reth            = */ reth,
@@ -501,7 +503,7 @@ register_opcode_status register_req_opcode_series(
     bool postComplete_immdt = wr_info_immdt->mask & WR_COMP_MASK;  // always TRUE
     WITH_CHECK(__register_req_opcode(
         end_opcode_num_immdt, endname_immdt, irdma_req_opnum,
-        handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
+        handle_incoming, handle_duplicate, res, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
         /* reth            = */ false,
@@ -517,7 +519,7 @@ register_opcode_status register_req_opcode_series(
     ), err4)
     WITH_CHECK(__register_req_opcode(
         only_opcode_num_immdt, onlyname_immdt, irdma_req_opnum,
-        handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
+        handle_incoming, handle_duplicate, res, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
         /* reth            = */ reth,
@@ -536,7 +538,7 @@ register_opcode_status register_req_opcode_series(
     bool postComplete_inv = wr_info_inv->mask & WR_COMP_MASK;  // always TRUE
     WITH_CHECK(__register_req_opcode(
         end_opcode_num_inv, endname_inv, irdma_req_opnum,
-        handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
+        handle_incoming, handle_duplicate, res, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
         /* reth            = */ false,
@@ -552,7 +554,7 @@ register_opcode_status register_req_opcode_series(
     ), err4)
     WITH_CHECK(__register_req_opcode(
         only_opcode_num_inv, onlyname_inv, irdma_req_opnum,
-        handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
+        handle_incoming, handle_duplicate, res, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
         /* reth            = */ reth,

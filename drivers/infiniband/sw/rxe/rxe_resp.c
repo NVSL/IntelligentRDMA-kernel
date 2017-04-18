@@ -335,6 +335,8 @@ static enum resp_states check_resource(struct rxe_qp *qp,
         //   with the code here.  Rather, the code seems only to be ensuring
         //   that rd_atomic resources have been allocated; it doesn't check
         //   anything about how many are in use
+        // Amendment: maybe that is exactly the point of the above comment,
+        //   that there is no check needed for how many are in use
 		if (likely(qp->attr.max_dest_rd_atomic > 0)) {
 			return RESPST_EXECUTE;
         } else {
