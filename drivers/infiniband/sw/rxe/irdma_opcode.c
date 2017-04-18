@@ -12,8 +12,11 @@
 // Opcode numbers.  Ideally this is the only place they are defined, and outside code
 // is completely agnostic to them.
 #define IRDMA_WR_RETURN5 (0x10)
+#define IRDMA_WR_PLUS5 (0x11)
 #define IRDMA_OPCODE_RETURN5_REQ (0x18)
 #define IRDMA_OPCODE_RETURN5_ACK (0x19)
+#define IRDMA_OPCODE_PLUS5_REQ (0x1a)
+#define IRDMA_OPCODE_PLUS5_ACK (0x1b)
 
 // ****************************
 // 'Helpers' used farther below
@@ -133,9 +136,17 @@ static handle_incoming_status handle_incoming_read(struct irdma_context* ic, str
     return INCOMING_OK;
 }
 
-static handle_incoming_status handle_incoming_custom(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+static handle_incoming_status handle_incoming_return5(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
     int raw_payload[] = {5};
     struct irdma_mem payload = {NULL, (u64)(raw_payload), sizeof(int)};
+    if(send_ack_packet_or_series(ic, &payload, pkt, AETH_ACK_UNLIMITED, pkt->psn)) return INCOMING_ERROR_RNR;
+    return INCOMING_OK;
+}
+
+static handle_incoming_status handle_incoming_plus5(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+    int raw_payload = *(int*)payload_addr(pkt);
+    struct irdma_mem payload = {NULL, (u64)(&raw_payload), sizeof(int)};
+    raw_payload += 5;
     if(send_ack_packet_or_series(ic, &payload, pkt, AETH_ACK_UNLIMITED, pkt->psn)) return INCOMING_ERROR_RNR;
     return INCOMING_OK;
 }
@@ -226,8 +237,13 @@ static handle_duplicate_status handle_duplicate_read(struct irdma_context* ic, s
   }
 }
 
-static handle_duplicate_status handle_duplicate_custom(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
-  pr_warn("Duplicate custom-opcode received\n");
+static handle_duplicate_status handle_duplicate_return5(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  pr_warn("Duplicate return5 opcode received\n");
+  return HANDLED;
+}
+
+static handle_duplicate_status handle_duplicate_plus5(struct irdma_context* ic, struct rxe_pkt_info* pkt) {
+  pr_warn("Duplicate plus5 opcode received\n");
   return HANDLED;
 }
 
@@ -272,7 +288,7 @@ static handle_ack_status handle_incoming_sendorwrite_ack(struct irdma_context* i
     return ACK_NEXT;
 }
 
-static handle_ack_status handle_incoming_custom_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
+static handle_ack_status handle_incoming_return_ack(struct irdma_context* ic, struct rxe_pkt_info* pkt, struct rxe_send_wqe* wqe) {
   if(copy_to_dma_loc(ic, &wqe->dma, payload_addr(pkt), payload_size(pkt))) return ACK_ERROR;
   return ACK_COMPLETE;
 }
@@ -341,7 +357,13 @@ register_opcode_status irdma_init_opcodes(void) {
   WITH_CHECK(register_single_ack_opcode(
       IRDMA_OPCODE_RETURN5_ACK,
       "IRDMA_OPCODE_RETURN5_ACK",
-      /*.handle_incoming  = */ &handle_incoming_custom_ack,
+      /*.handle_incoming  = */ &handle_incoming_return_ack,
+      /*.atomicack       = */ false
+  ))
+  WITH_CHECK(register_single_ack_opcode(
+      IRDMA_OPCODE_PLUS5_ACK,
+      "IRDMA_OPCODE_PLUS5_ACK",
+      /*.handle_incoming  = */ &handle_incoming_return_ack,
       /*.atomicack       = */ false
   ))
 
@@ -487,6 +509,20 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ false,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IRDMA_OPCODE_RETURN5_ACK))
+  WITH_CHECK(register_std_wr_opcode(IRDMA_WR_PLUS5, "IRDMA_WR_PLUS5",
+        /* compatible qpts  */ qpts, 1,
+        /* type           = */ WR_READ_MASK,  // TODO not correct at all, wrong behavior in certain places
+        /* immdt          = */ false,
+        /* invalidate     = */ false,
+        /* payload        = */ true,
+        /* reth           = */ false,
+        /* atmeth         = */ false,
+        /* wr_inline      = */ false,
+        /* alwaysEnabl... = */ false,
+        /* sender_wc_opcode   = */ IB_WC_RDMA_READ,
+        /* postComplete       = */ false,
+        /* receiver_wc_opcode = */ IB_WC_RECV,
+        /* ack_opcode_num = */ IRDMA_OPCODE_PLUS5_ACK))
   WITH_CHECK(register_loc_wr_opcode(IB_WR_REG_MR, "IB_WR_REG_MR",
         /* handle_wr      = */ &handle_wr_reg_mr,
         /* wr_inline      = */ false))
@@ -586,10 +622,23 @@ register_opcode_status irdma_init_opcodes(void) {
   WITH_CHECK(register_single_req_opcode(
       IRDMA_OPCODE_RETURN5_REQ,
       "IRDMA_OPCODE_RETURN5_REQ",
-      /*.handle_incoming  = */ &handle_incoming_custom,
-      /*.handle_duplicate = */ &handle_duplicate_custom,
+      /*.handle_incoming  = */ &handle_incoming_return5,
+      /*.handle_duplicate = */ &handle_duplicate_return5,
       /*.res              = */ false,
       /*.wr_opcode_num   = */ IRDMA_WR_RETURN5,
+      /*.qpt             = */ IB_QPT_RC,
+      /*.requiresReceive = */ false,
+      /*.perms           = */ IRDMA_PERM_NONE,
+      /*.sched_priority  = */ false,
+      /*.comp_swap       = */ false
+  ))
+  WITH_CHECK(register_single_req_opcode(
+      IRDMA_OPCODE_PLUS5_REQ,
+      "IRDMA_OPCODE_PLUS5_REQ",
+      /*.handle_incoming  = */ &handle_incoming_plus5,
+      /*.handle_duplicate = */ &handle_duplicate_plus5,
+      /*.res              = */ false,
+      /*.wr_opcode_num   = */ IRDMA_WR_PLUS5,
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_NONE,
