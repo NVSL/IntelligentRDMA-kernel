@@ -43,29 +43,6 @@ struct irdma_context {
   struct rxe_qp* qp;
 };
 
-// These IRDMA_REQ_OPNUMS arise out of the observation that all the existing entries in
-// rxe_opcode have, in their 'mask' field, exactly one of the following 5 bits set:
-// RXE_ACK_MASK, RXE_SEND_MASK, RXE_WRITE_MASK, RXE_READ_MASK, RXE_ATOMIC_MASK
-// We separate this distinction out into IRDMA_REQ_OPNUMS, and we further separate
-// RXE_ACK_MASK packets by having them be registered with a different function and
-// by tracking them separately with the 'ack' field in rxe_opcode_info (among other things).
-// We also observe that RXE_REQ_MASK is set iff RXE_ACK_MASK is not,
-// and we generalize references to RXE_REQ_MASK to mean (not ack).
-// Having these defined here is cheating for now, to allow other code to test
-//   against IRDMA_* opnums.
-// The reason I don't like this is that this prohibits new opnums from emulating
-//   the same functionality as (wherever the test is happening).
-// Ideally these should be defined only in irdma_opcode.c.
-#ifndef IRDMA_REQ_OPNUMS
-#define IRDMA_REQ_OPNUMS
-typedef enum {
-  IRDMA_REQ_SEND,
-  IRDMA_REQ_WRITE,
-  IRDMA_REQ_READ,
-  IRDMA_REQ_ATOMIC,
-} IRDMA_REQ_OPNUM;
-#endif
-
 // rxe_opcode 0 is reserved for our special NAK operation, and for marking unregistered
 #define IRDMA_OPCODE_NAK 0
 
@@ -316,10 +293,6 @@ register_opcode_status register_loc_wr_opcode(
 //   as an 'ack' opcode)
 //   the special value 0 is reserved; you may not specify opcode_num==0
 // name : a name for the opcode (max 63 characters, cannot be "")
-// irdma_req_opnum : which of the IRDMA_REQ_OPNUMS this opcode belongs to.
-//   Having this here is only a temporary measure, since it is (very) unextensible.
-//   Hopefully, in the near future all functionality can be captured with the other
-//   arguments, and nowhere in the code will test against specific irdma_req_opnums.
 // handle_incoming : a function to be called to handle incoming packets of this type
 //   (see also irdma_funcs.h)
 // handle_duplicate : a function to be called to handle *duplicate* incoming packets of this type
@@ -357,7 +330,6 @@ register_opcode_status register_loc_wr_opcode(
 register_opcode_status register_single_req_opcode(
     unsigned opcode_num,
     char* name,
-    IRDMA_REQ_OPNUM irdma_req_opnum,
     handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     bool res,
@@ -471,7 +443,6 @@ register_opcode_status register_req_opcode_series(
     unsigned end_opcode_num,
     unsigned only_opcode_num,
     char* basename,
-    IRDMA_REQ_OPNUM irdma_req_opnum,
     handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     bool res,

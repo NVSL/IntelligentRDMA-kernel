@@ -142,7 +142,6 @@ static void computeLengthAndOffset(struct rxe_opcode_info* info) {
 static register_opcode_status __register_req_opcode(
     unsigned opcode_num,
     char* name,
-    IRDMA_REQ_OPNUM irdma_req_opnum,
     handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     bool res,
@@ -191,7 +190,7 @@ static register_opcode_status __register_req_opcode(
         // This is not the case for any 'request' packets.
     | SET_IF(false, RXE_AETH_MASK)
         // RXE_ATMACK_MASK indicates whether the packet needs an 'atomic ack extended transport header',
-        // i.e. is an ack/response to an IRDMA_REQ_ATOMIC operation.  Not the case for any 'request' packets.
+        // i.e. is an ack/response to an atomic operation.  Not the case for any 'request' packets.
     | SET_IF(false, RXE_ATMACK_MASK)
         // RXE_RDETH_MASK indicates whether the packet needs a 'reliable datagram extended transport header'.
         // Strangely, this bit is never used for anything (as far as I can tell), and "RD" is not a
@@ -256,7 +255,6 @@ static void __deregister_opcode(unsigned opcode_num) {
 register_opcode_status register_single_req_opcode(
   unsigned opcode_num,
   char* name,
-  IRDMA_REQ_OPNUM irdma_req_opnum,
   handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
   handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
   bool res,
@@ -288,7 +286,6 @@ register_opcode_status register_single_req_opcode(
   st = __register_req_opcode(
       opcode_num,
       name,
-      irdma_req_opnum,
       handle_incoming,
       handle_duplicate,
       res,
@@ -354,7 +351,6 @@ register_opcode_status register_req_opcode_series(
   unsigned end_opcode_num,
   unsigned only_opcode_num,
   char* basename,
-  IRDMA_REQ_OPNUM irdma_req_opnum,
   handle_incoming_status (*handle_incoming)(struct irdma_context*, struct rxe_pkt_info*),
   handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
   bool res,
@@ -436,7 +432,7 @@ register_opcode_status register_req_opcode_series(
   }
 
   WITH_CHECK(__register_req_opcode(
-      start_opcode_num, startname, irdma_req_opnum,
+      start_opcode_num, startname,
       handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
@@ -452,7 +448,7 @@ register_opcode_status register_req_opcode_series(
       /* end             = */ false
   ), err0)
   WITH_CHECK(__register_req_opcode(
-      middle_opcode_num, middlename, irdma_req_opnum,
+      middle_opcode_num, middlename,
       handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
@@ -468,7 +464,7 @@ register_opcode_status register_req_opcode_series(
       /* end             = */ false
   ), err1)
   WITH_CHECK(__register_req_opcode(
-      end_opcode_num, endname, irdma_req_opnum,
+      end_opcode_num, endname,
       handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
@@ -484,7 +480,7 @@ register_opcode_status register_req_opcode_series(
       /* end             = */ true
   ), err2)
   WITH_CHECK(__register_req_opcode(
-      only_opcode_num, onlyname, irdma_req_opnum,
+      only_opcode_num, onlyname,
       handle_incoming, handle_duplicate, res, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
@@ -502,7 +498,7 @@ register_opcode_status register_req_opcode_series(
   if(immdt==BOTH) {
     bool postComplete_immdt = wr_info_immdt->mask & WR_COMP_MASK;  // always TRUE
     WITH_CHECK(__register_req_opcode(
-        end_opcode_num_immdt, endname_immdt, irdma_req_opnum,
+        end_opcode_num_immdt, endname_immdt,
         handle_incoming, handle_duplicate, res, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
@@ -518,7 +514,7 @@ register_opcode_status register_req_opcode_series(
         /* end             = */ true
     ), err4)
     WITH_CHECK(__register_req_opcode(
-        only_opcode_num_immdt, onlyname_immdt, irdma_req_opnum,
+        only_opcode_num_immdt, onlyname_immdt,
         handle_incoming, handle_duplicate, res, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
@@ -537,7 +533,7 @@ register_opcode_status register_req_opcode_series(
   if(invalidate==BOTH) {
     bool postComplete_inv = wr_info_inv->mask & WR_COMP_MASK;  // always TRUE
     WITH_CHECK(__register_req_opcode(
-        end_opcode_num_inv, endname_inv, irdma_req_opnum,
+        end_opcode_num_inv, endname_inv,
         handle_incoming, handle_duplicate, res, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
@@ -553,7 +549,7 @@ register_opcode_status register_req_opcode_series(
         /* end             = */ true
     ), err4)
     WITH_CHECK(__register_req_opcode(
-        only_opcode_num_inv, onlyname_inv, irdma_req_opnum,
+        only_opcode_num_inv, onlyname_inv,
         handle_incoming, handle_duplicate, res, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
