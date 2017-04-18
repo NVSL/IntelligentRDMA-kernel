@@ -80,6 +80,7 @@ enum rxe_wr_mask {
     WR_PAYLOAD_MASK = BIT(7),
     WR_SOLICITED_MASK = BIT(8),
     WR_COMP_MASK = BIT(9),
+    WR_RETH_MASK = BIT(10),
 };
 
 #define WR_MAX_QPT		(8)
@@ -229,6 +230,11 @@ typedef enum {
 //   TODO: in future could this be indicated by rxe_send_wqe.dma != NULL on the individual send
 //   request, instead of by a flag on the wr?  It would be up to individual receiver functions
 //   to handle the presence or absence of a payload 'correctly' (however the user defines that).
+// remaddr : whether the operation should include a remote address (including rkey) specified
+//   by the sender.  More formally, whether the operation's first (or only) packet should include
+//   an 'RDMA extended transport header'.
+//   Note that atomic operations should mark 'false' here even though they do fit the description
+//     above.  This will be addressed in a future commit.
 // wr_inline : allow (but not require) 'IB_SEND_INLINE' flag with wr's having this wr_opcode
 // alwaysEnableSolicited : the rules for whether to set the 'solicited' flag in the bth are
 //   confusing to me.  First of all, the flag is never set unless the user dynamically specifies
@@ -274,6 +280,7 @@ register_opcode_status register_std_wr_opcode(
     bool immdt,
     bool invalidate,
     bool payload,
+    bool remaddr,
     bool wr_inline,
     bool alwaysEnableSolicited,
     enum ib_wc_opcode sender_wc_opcode,
@@ -444,6 +451,7 @@ enum ynb { YES, NO, BOTH };
 //     - have not been registered
 //     - were registered with register_loc_wr_opcode
 //     - were not registered as supporting this qpt
+//     - were registered with different values of 'remaddr'
 //   NAME_INVALID if the 'basename' string is too long, or is ""
 //   ARGUMENTS_INVALID if the combination of arguments passed is invalid
 // In any of the error cases, the state when the function returns is guaranteed to be equivalent to

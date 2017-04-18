@@ -24,6 +24,7 @@ register_opcode_status register_std_wr_opcode(
     bool immdt,
     bool invalidate,
     bool payload,
+    bool remaddr,
     bool wr_inline,
     bool alwaysEnableSolicited,
     enum ib_wc_opcode sender_wc_opcode,
@@ -64,6 +65,7 @@ register_opcode_status register_std_wr_opcode(
     | (immdt ? WR_IMMDT_MASK : 0)
     | (invalidate ? WR_INV_MASK : 0)
     | (payload ? WR_PAYLOAD_MASK : 0)
+    | (remaddr ? WR_RETH_MASK : 0)
     | (postComplete ? WR_COMP_MASK : 0)
     | (alwaysEnableSolicited ? WR_SOLICITED_MASK : 0)
     | type;
@@ -143,7 +145,7 @@ static register_opcode_status __register_req_opcode(
     handle_duplicate_status (*handle_duplicate)(struct irdma_context*, struct rxe_pkt_info*),
     unsigned wr_opcode_num,
     enum ib_qp_type qpt,
-    bool immdt, bool invalidate,
+    bool immdt, bool invalidate, bool reth,
     bool requiresReceive, bool postComplete, unsigned char perms, bool sched_priority, bool comp_swap,
     /* internal arguments */ bool start, bool middle, bool end
 ) {
@@ -179,9 +181,7 @@ static register_opcode_status __register_req_opcode(
     | SET_IF(end, RXE_END_MASK)
     | SET_IF(sched_priority, IRDMA_SCHED_PRIORITY_MASK)
     | SET_IF(comp_swap, IRDMA_COMPSWAP_MASK)
-        // RXE_RETH_MASK indicates whether the packet needs an 'RDMA extended transport header'.
-        // The rule here reflects existing convention.
-    | SET_IF((irdma_req_opnum == IRDMA_REQ_READ || irdma_req_opnum == IRDMA_REQ_WRITE) && start, RXE_RETH_MASK)
+    | SET_IF(reth, RXE_RETH_MASK)
         // RXE_AETH_MASK indicates whether the packet needs an 'ack extended transport header'.
         // This is not the case for any 'request' packets.
     | SET_IF(false, RXE_AETH_MASK)
@@ -266,7 +266,7 @@ register_opcode_status register_single_req_opcode(
 ) {
   register_opcode_status st;
   struct rxe_opcode_group thisGroup;
-  bool immdt, inv, postComplete;
+  bool immdt, inv, reth, postComplete;
   struct rxe_wr_opcode_info *wr_info = &rxe_wr_opcode_info[wr_opcode_num];
   if(unlikely(!wr_info->name[0])) return OPCODE_REG_ERROR;
   if(unlikely(wr_info->type==LOCAL)) return OPCODE_REG_ERROR;
@@ -280,6 +280,7 @@ register_opcode_status register_single_req_opcode(
   if(unlikely(is_registered(&wr_info->std.opcode_groups[qpt]))) return OPCODE_IN_USE;
   immdt = wr_info->mask & WR_IMMDT_MASK;
   inv = wr_info->mask & WR_INV_MASK;
+  reth = wr_info->mask & WR_RETH_MASK;
   postComplete = wr_info->mask & WR_COMP_MASK;
   if(unlikely(immdt && !requiresReceive)) return ARGUMENTS_INVALID;
     // the above line is a restriction for single_req_opcodes but not for all req_opcodes
@@ -293,6 +294,7 @@ register_opcode_status register_single_req_opcode(
       qpt,
       immdt,
       inv,
+      reth,
       requiresReceive,
       postComplete,
       perms, sched_priority, comp_swap,
@@ -366,6 +368,7 @@ register_opcode_status register_req_opcode_series(
   struct rxe_opcode_group* opcode_group_immdt = &wr_info_immdt->std.opcode_groups[qpt];
   struct rxe_opcode_group* opcode_group_inv = &wr_info_inv->std.opcode_groups[qpt];
   size_t len = strlen(basename);
+  bool reth = wr_info->mask & WR_RETH_MASK;
   char startname[64], middlename[64], endname[64], onlyname[64];
   char endname_immdt[64], onlyname_immdt[64], endname_inv[64], onlyname_inv[64];
   if(unlikely(len > 56 || len == 0)) return NAME_INVALID;
@@ -385,6 +388,7 @@ register_opcode_status register_req_opcode_series(
     if(unlikely(!wr_info_immdt->name[0])) return OPCODE_REG_ERROR;
     if(unlikely(wr_info_immdt->type==LOCAL)) return OPCODE_REG_ERROR;
     if(unlikely(!wr_info_immdt->std.qpts[qpt])) return OPCODE_REG_ERROR;
+    if(unlikely((wr_info_immdt->mask & WR_RETH_MASK) != reth)) return OPCODE_REG_ERROR;
     if(unlikely(is_registered(opcode_group_immdt))) return OPCODE_IN_USE;
     if(unlikely(!(wr_info_immdt->mask & WR_IMMDT_MASK))) return ARGUMENTS_INVALID;
   }
@@ -392,6 +396,7 @@ register_opcode_status register_req_opcode_series(
     if(unlikely(!wr_info_inv->name[0])) return OPCODE_REG_ERROR;
     if(unlikely(wr_info_inv->type==LOCAL)) return OPCODE_REG_ERROR;
     if(unlikely(!wr_info_inv->std.qpts[qpt])) return OPCODE_REG_ERROR;
+    if(unlikely((wr_info_inv->mask & WR_RETH_MASK) != reth)) return OPCODE_REG_ERROR;
     if(unlikely(is_registered(opcode_group_inv))) return OPCODE_IN_USE;
     if(unlikely(!(wr_info_inv->mask & WR_INV_MASK))) return ARGUMENTS_INVALID;
   }
@@ -428,6 +433,7 @@ register_opcode_status register_req_opcode_series(
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
+      /* reth            = */ reth,
       /* requiresReceive = */ requiresReceive,
       /* postComplete    = */ false,
       /* perms           = */ perms,
@@ -442,6 +448,7 @@ register_opcode_status register_req_opcode_series(
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ false,
       /* invalidate      = */ false,
+      /* reth            = */ false,
       /* requiresReceive = */ false,
       /* postComplete    = */ false,
       /* perms           = */ perms,
@@ -456,6 +463,7 @@ register_opcode_status register_req_opcode_series(
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
+      /* reth            = */ false,
       /* requiresReceive = */ (immdt==YES),
       /* postComplete    = */ wr_info->mask & WR_COMP_MASK,
       /* perms           = */ perms,
@@ -470,6 +478,7 @@ register_opcode_status register_req_opcode_series(
       handle_incoming, handle_duplicate, wr_opcode_num, qpt,
       /* immdt           = */ (immdt==YES),
       /* invalidate      = */ (invalidate==YES),
+      /* reth            = */ reth,
       /* requiresReceive = */ requiresReceive || (immdt==YES),
       /* postComplete    = */ wr_info->mask & WR_COMP_MASK,
       /* perms           = */ perms,
@@ -486,6 +495,7 @@ register_opcode_status register_req_opcode_series(
         handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
+        /* reth            = */ false,
         /* requiresReceive = */ !requiresReceive,
         /* postComplete    = */ postComplete_immdt,
         /* perms           = */ perms,
@@ -500,6 +510,7 @@ register_opcode_status register_req_opcode_series(
         handle_incoming, handle_duplicate, wr_opcode_num_immdt, qpt,
         /* immdt           = */ true,
         /* invalidate      = */ false,
+        /* reth            = */ reth,
         /* requiresReceive = */ true,
         /* postComplete    = */ postComplete_immdt,
         /* perms           = */ perms,
@@ -517,6 +528,7 @@ register_opcode_status register_req_opcode_series(
         handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
+        /* reth            = */ false,
         /* requiresReceive = */ false,
         /* postComplete    = */ postComplete_inv,
         /* perms           = */ perms,
@@ -531,6 +543,7 @@ register_opcode_status register_req_opcode_series(
         handle_incoming, handle_duplicate, wr_opcode_num_inv, qpt,
         /* immdt           = */ false,
         /* invalidate      = */ true,
+        /* reth            = */ reth,
         /* requiresReceive = */ requiresReceive,
         /* postComplete    = */ postComplete_inv,
         /* perms           = */ perms,
