@@ -11,9 +11,9 @@
 
 // Opcode numbers.  Ideally this is the only place they are defined, and outside code
 // is completely agnostic to them.
-#define IRDMA_WR_CUSTOM (0x10)
-#define IRDMA_OPCODE_CUSTOM_REQ (0x18)
-#define IRDMA_OPCODE_CUSTOM_ACK (0x19)
+#define IRDMA_WR_RETURN5 (0x10)
+#define IRDMA_OPCODE_RETURN5_REQ (0x18)
+#define IRDMA_OPCODE_RETURN5_ACK (0x19)
 
 // ****************************
 // 'Helpers' used farther below
@@ -339,8 +339,8 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.atomicack       = */ false
   ))
   WITH_CHECK(register_single_ack_opcode(
-      IRDMA_OPCODE_CUSTOM_ACK,
-      "IRDMA_OPCODE_CUSTOM_ACK",
+      IRDMA_OPCODE_RETURN5_ACK,
+      "IRDMA_OPCODE_RETURN5_ACK",
       /*.handle_incoming  = */ &handle_incoming_custom_ack,
       /*.atomicack       = */ false
   ))
@@ -473,7 +473,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* postComplete       = */ true,
         /* receiver_wc_opcode = */ IB_WC_RECV,
         /* ack_opcode_num = */ IB_OPCODE_RC_RDMA_READ_RESPONSE_FIRST))
-  WITH_CHECK(register_std_wr_opcode(IRDMA_WR_CUSTOM, "IRDMA_WR_CUSTOM",
+  WITH_CHECK(register_std_wr_opcode(IRDMA_WR_RETURN5, "IRDMA_WR_RETURN5",
         /* compatible qpts  */ qpts, 1,
         /* type           = */ WR_READ_MASK,  // TODO not correct at all, wrong behavior in certain places
         /* immdt          = */ false,
@@ -486,7 +486,7 @@ register_opcode_status irdma_init_opcodes(void) {
         /* sender_wc_opcode   = */ IB_WC_RDMA_READ,
         /* postComplete       = */ false,
         /* receiver_wc_opcode = */ IB_WC_RECV,
-        /* ack_opcode_num = */ IRDMA_OPCODE_CUSTOM_ACK))
+        /* ack_opcode_num = */ IRDMA_OPCODE_RETURN5_ACK))
   WITH_CHECK(register_loc_wr_opcode(IB_WR_REG_MR, "IB_WR_REG_MR",
         /* handle_wr      = */ &handle_wr_reg_mr,
         /* wr_inline      = */ false))
@@ -584,12 +584,12 @@ register_opcode_status irdma_init_opcodes(void) {
       /*.comp_swap       = */ false
   ))
   WITH_CHECK(register_single_req_opcode(
-      IRDMA_OPCODE_CUSTOM_REQ,
-      "IRDMA_OPCODE_CUSTOM_REQ",
+      IRDMA_OPCODE_RETURN5_REQ,
+      "IRDMA_OPCODE_RETURN5_REQ",
       /*.handle_incoming  = */ &handle_incoming_custom,
       /*.handle_duplicate = */ &handle_duplicate_custom,
       /*.res              = */ false,
-      /*.wr_opcode_num   = */ IRDMA_WR_CUSTOM,
+      /*.wr_opcode_num   = */ IRDMA_WR_RETURN5,
       /*.qpt             = */ IB_QPT_RC,
       /*.requiresReceive = */ false,
       /*.perms           = */ IRDMA_PERM_NONE,
