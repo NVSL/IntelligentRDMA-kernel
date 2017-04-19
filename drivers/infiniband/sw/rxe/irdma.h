@@ -212,6 +212,7 @@ typedef enum {
 //   to handle the presence or absence of a payload 'correctly' (however the user defines that).
 //   TODO: alternately, on the 'ack' side I've chosen to let this be implied, in that 'series'
 //   acks have payloads and single acks do not.  This seems reasonable and could apply to reqs too.
+//   However, UD seems an important exception (single packets that do have payload)
 // remaddr : whether the operation should include a remote address (including rkey) specified
 //   by the sender.  More formally, whether the operation's first (or only) packet should include
 //   an 'RDMA extended transport header'.  This option is ignored if atomic==TRUE.
