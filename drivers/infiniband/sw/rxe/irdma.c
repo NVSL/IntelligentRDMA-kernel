@@ -388,20 +388,24 @@ register_opcode_status register_req_opcode_series(
   ERRIF((!(wr_info->mask & WR_IMMDT_MASK)) && immdt==YES, ARGUMENTS_INVALID)
   ERRIF((!(wr_info->mask & WR_INV_MASK)) && invalidate==YES, ARGUMENTS_INVALID)
   if(immdt==BOTH) {
+    bool immdtreth = wr_info_immdt->mask & WR_RETH_MASK;
+    bool immdtatmeth = wr_info_immdt->mask & WR_ATMETH_MASK;
     ERRIF(!isWrOpcodeRegistered(wr_opcode_num_immdt), OPCODE_REG_ERROR)
     ERRIF(wr_info_immdt->type==LOCAL, OPCODE_REG_ERROR)
     ERRIF(!wr_info_immdt->std.qpts[qpt], OPCODE_REG_ERROR)
-    ERRIF((wr_info_immdt->mask & WR_RETH_MASK) != reth, OPCODE_REG_ERROR)
-    ERRIF((wr_info_immdt->mask & WR_ATMETH_MASK) != atmeth, OPCODE_REG_ERROR)
+    ERRIF(immdtreth != reth, OPCODE_REG_ERROR)
+    ERRIF(immdtatmeth != atmeth, OPCODE_REG_ERROR)
     ERRIF(is_registered(opcode_group_immdt), OPCODE_IN_USE)
     ERRIF(!(wr_info_immdt->mask & WR_IMMDT_MASK), ARGUMENTS_INVALID)
   }
   if(invalidate==BOTH) {
+    bool invreth = wr_info_inv->mask & WR_RETH_MASK;
+    bool invatmeth = wr_info_inv->mask & WR_ATMETH_MASK;
     ERRIF(!isWrOpcodeRegistered(wr_opcode_num_inv), OPCODE_REG_ERROR)
     ERRIF(wr_info_inv->type==LOCAL, OPCODE_REG_ERROR)
     ERRIF(!wr_info_inv->std.qpts[qpt], OPCODE_REG_ERROR)
-    ERRIF((wr_info_inv->mask & WR_RETH_MASK) != reth, OPCODE_REG_ERROR)
-    ERRIF((wr_info_inv->mask & WR_ATMETH_MASK) != atmeth, OPCODE_REG_ERROR)
+    ERRIF(invreth != reth, OPCODE_REG_ERROR)
+    ERRIF(invatmeth != atmeth, OPCODE_REG_ERROR)
     ERRIF(is_registered(opcode_group_inv), OPCODE_IN_USE)
     ERRIF(!(wr_info_inv->mask & WR_INV_MASK), ARGUMENTS_INVALID)
   }
