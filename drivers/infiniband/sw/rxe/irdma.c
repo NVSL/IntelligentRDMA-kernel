@@ -643,11 +643,6 @@ register_opcode_status register_ack_opcode_series(
   strcat(middlename, "_middle");
   strcat(endname, "_end");
   strcat(onlyname, "_only");
-  thisGroup.is_series = true;
-  thisGroup.opcode_set.start_opcode_num = start_opcode_num;
-  thisGroup.opcode_set.middle_opcode_num = middle_opcode_num;
-  thisGroup.opcode_set.end_opcode_num = end_opcode_num;
-  thisGroup.opcode_set.only_opcode_num = only_opcode_num;
   WITH_CHECK(__register_ack_opcode(start_opcode_num, startname,
       handle_incoming, atomicack, true, false, false), err0)
   WITH_CHECK(__register_ack_opcode(middle_opcode_num, middlename,
@@ -656,6 +651,15 @@ register_opcode_status register_ack_opcode_series(
       handle_incoming, atomicack, false, false, true), err2)
   WITH_CHECK(__register_ack_opcode(only_opcode_num, onlyname,
       handle_incoming, atomicack, true, false, true), err3)
+  thisGroup.is_series = true;
+  thisGroup.opcode_set.start_opcode_num = start_opcode_num;
+  thisGroup.opcode_set.middle_opcode_num = middle_opcode_num;
+  thisGroup.opcode_set.end_opcode_num = end_opcode_num;
+  thisGroup.opcode_set.only_opcode_num = only_opcode_num;
+  rxe_opcode[start_opcode_num].containingGroup = thisGroup;
+  rxe_opcode[middle_opcode_num].containingGroup = thisGroup;
+  rxe_opcode[end_opcode_num].containingGroup = thisGroup;
+  rxe_opcode[only_opcode_num].containingGroup = thisGroup;
   return ret;
 
 err3:

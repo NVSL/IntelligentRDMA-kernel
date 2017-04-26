@@ -32,12 +32,12 @@ int send_ack_packet_or_series(
     u32 psn
 ) {
   struct rxe_wr_opcode_info* wr_info = &rxe_wr_opcode_info[rxe_opcode[req_pkt->opcode].req.wr_opcode_num];
-  struct rxe_opcode_group ack_opcode_group = wr_info->std.ack_opcode_group;
+  struct rxe_opcode_group* ack_opcode_group = &wr_info->std.ack_opcode_group;
   if((syndrome & AETH_TYPE_MASK) != AETH_ACK) {
     pr_err("Can't send ack packet with NAK syndrome 0x%x\n", syndrome);
     return -1;  // what should the error code be here?
   }
-  if(ack_opcode_group.is_series) {
+  if(ack_opcode_group->is_series) {
     int mtu = ic->qp->mtu;
     struct resp_res *res;
 
@@ -76,7 +76,7 @@ int send_ack_packet_or_series(
     ic->qp->resp.res = res;  // this signals 'series send in progress' to rxe_responder
     return __continue_sending_ack_series(ic->qp, req_pkt);
   } else {
-    unsigned opcode_num = ack_opcode_group.opcode_num;
+    unsigned opcode_num = ack_opcode_group->opcode_num;
     return __send_packet_with_opcode(ic->qp, payload, req_pkt, syndrome, psn, opcode_num);
   }
 }
