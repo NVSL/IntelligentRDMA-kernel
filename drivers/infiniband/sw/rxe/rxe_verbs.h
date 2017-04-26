@@ -209,6 +209,8 @@ struct rxe_resp_info {
 	enum ib_wc_status	status;
 	u8			aeth_syndrome;
 
+    bool cleanedup;
+
 	/* Receive only */
 	struct rxe_recv_wqe	*wqe;
 

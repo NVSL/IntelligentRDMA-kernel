@@ -363,8 +363,8 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 {
 	struct irdma_context ic = { qp };
-	handle_incoming_status hs = rxe_opcode[pkt->opcode].req.handle_incoming(&ic, pkt);
-    switch(hs) {
+    qp->resp.cleanedup = false;
+    switch(rxe_opcode[pkt->opcode].req.handle_incoming(&ic, pkt)) {
       case INCOMING_ERROR_LENGTH: return RESPST_ERR_LENGTH;
       case INCOMING_ERROR_RKEY_VIOLATION: return RESPST_ERR_RKEY_VIOLATION;
       case INCOMING_ERROR_RNR: return RESPST_ERR_RNR;
@@ -376,7 +376,7 @@ static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 	/* We successfully processed this new request. */
 	qp->resp.msn++;
 
-    if(qp->resp.res) return RESPST_DONE;
+    if(qp->resp.res || qp->resp.cleanedup) return RESPST_DONE;
 
 	/* next expected psn, read handles this separately */
 	qp->resp.psn = (pkt->psn + 1) & BTH_PSN_MASK;

@@ -209,6 +209,7 @@ int __continue_sending_ack_series(struct rxe_qp* qp, struct rxe_pkt_info* req_pk
 		if (psn_compare(res->cur_psn, qp->resp.psn) >= 0)
 			qp->resp.psn = res->cur_psn;
 		__cleanup(qp, req_pkt);
+        qp->resp.cleanedup = true;
         return 0;
 	}
 }
